@@ -1,20 +1,150 @@
-# DVMS (Data Visualization and Management System)
+# DVMS
 
-A simple data visualization and management system built with Flask.  
-The system reads data from Excel or CSV files, displays the dataset in a clean table view,  
-and generates both bar charts and pie charts based on the structure of the data.
+**Data Visualization and Management System**
 
-## Features
+DNA‑DVMS is a modern, extensible data visualization and analytics dashboard built with **Flask**, **Pandas**, and **Matplotlib**.  
+The system ingests Excel or CSV datasets, provides an interactive dashboard overview, and supports multiple analytical visualizations with a professional UI inspired by enterprise BI tools.
 
-- Load data from Excel (.xlsx/.xls) or CSV (.csv)
-- Automatically detect numeric and non‑numeric columns
-- Present data in a Bootstrap-styled table
-- Create bar charts:
-  - If numeric data exists → aggregate (mean / sum / count)
-  - If no numeric column → frequency chart
-- Create pie charts (numeric or frequency)
-- Always show the newest chart using cache‑busted images
-- No fixed schema required (data‑agnostic)
+---
+
+## Key Features
+
+### Data Ingestion & Management
+
+- Load data from **Excel (.xlsx / .xls)** or **CSV (.csv)** files
+- Environment‑based dataset configuration via `DATA_PATH`
+- Data‑agnostic (no fixed schema required)
+- Automatic detection of numeric and non‑numeric columns
+- Clean, Bootstrap‑styled data table view
+
+---
+
+### Visualization Capabilities
+
+DNA‑DVMS supports **multiple chart types**, each available both on the dashboard and as individual analytical pages:
+
+- **Bar Chart**
+  - Aggregated numeric values (mean)
+  - Frequency fallback when numeric data is unavailable
+- **Line Chart**
+  - Trend visualization over grouped categories
+- **Pie Chart**
+  - Distribution or frequency‑based visualization
+- **Scatter Plot**
+  - Correlation view between numeric variables
+- **Heatmap**
+  - Correlation matrix of numeric features (Seaborn‑powered)
+
+> All charts are rendered server‑side and saved as cache‑busted images to ensure the latest data is always displayed.
+
+---
+
+### Interactive Analytics Dashboard
+
+- Unified **Analytics Dashboard** displaying:
+  - Bar, Line, Pie, Scatter, and Heatmap charts together
+- Card‑based responsive layout (Bootstrap grid)
+- Light gray analytics background with white chart cards
+- Professional color palette inspired by enterprise dashboards
+
+---
+
+### Navigation & UI
+
+- **Vertical sidebar navigation** with:
+  - Dashboard
+  - Bar Chart
+  - Line Chart
+  - Scatter Plot
+  - Heatmap
+  - Pie Chart
+  - Data Table
+- **Sidebar toggle button**:
+  - Collapse / expand navigation for focused analysis
+  - Improves usability on smaller screens
+- Active link highlighting
+- Consistent layout using a shared base template
+
+---
+
+### Project Structure
+
+DVMS/
+│  app.py
+│  data.xlsx / data.csv
+│  README.md
+│  requirements.txt
+│
+├── service/
+│   ├── __init__.py
+│   └── service.py
+│
+├── templates/
+│   ├── base.html
+│   ├── index.html
+│   ├── chart.html
+│   ├── data.html
+│   └── pie.html
+│
+└── static/
+    ├── bar.png
+    ├── line.png
+    ├── scatter.png
+    ├── heatmap.png
+    ├── pie.png
+
+### Architecture & Design
+
+- Clear **separation of concerns**:
+  - Routing (Flask)
+  - Data loading (DataService)
+  - Visualization (Matplotlib / Seaborn)
+  - UI rendering (Jinja2 + Bootstrap)
+- Reusable chart rendering template
+- Graceful fallback when required data types are missing
+- Easily extensible for:
+  - Database integration
+  - REST APIs
+  - Interactive charts (Chart.js / Plotly)
+  - Drill‑down analytics
+
+┌──────────────────────────┐
+│        Web Browser       │
+└────────────▲─────────────┘
+             │ HTTP Requests
+┌────────────┴─────────────┐
+│        Flask App         │
+│         (app.py)         │
+└────────────▲─────────────┘
+             │
+┌────────────┴─────────────┐
+│      DataService         │
+│  Load Excel / CSV files  │
+└────────────▲─────────────┘
+             │
+┌────────────┴─────────────┐
+│        Pandas            │
+│       DataFrame          │
+└────────────▲─────────────┘
+             │
+┌────────────┴─────────────┐
+│   Matplotlib / Seaborn   │
+│  Chart image generation  │
+└────────────▲─────────────┘
+             │
+┌────────────┴─────────────┐
+│      Static PNG Files    │
+└────────────▲─────────────┘
+             │
+┌────────────┴─────────────┐
+│     Jinja2 Templates     │
+│  Dashboard & UI Rendering│
+└────────────▲─────────────┘
+             │
+        Rendered HTML Page
+
+
+---
 
 ## Supported Data Formats
 
@@ -22,141 +152,7 @@ and generates both bar charts and pie charts based on the structure of the data.
 - `.xls` (Legacy Excel)
 - `.csv` (Comma‑Separated Values)
 
-To use CSV directly:
-
-```
-EXCEL_PATH=data.csv
-```
-
-or simply place a file named:
-
-```
-
-data.csv
-```
-
-in the project folder.
-
-### Running the Project
-
-First install dependencies:
+To use a CSV or custom file, set:
 
 ```bash
-pip install -r requirements.txt
-```
-
-Then start the application using:
-
-```bash
-python app.py
-```
-
-> This runs the Flask app directly using the code inside `app.py`  
-> and does not require setting any environment variables.
-
-You can also start Flask using the CLI:
-
-```bash
-flask run
-```
-
-Then open:
-
-```
-
-http://127.0.0.1:5000
-```
-
-## Project (Directory) Structure
-
-```
-
-DNA-DVMS/
-│  app.py
-│  data.xlsx / data.csv
-│  README.md
-│  .gitignore
-│  requirements.txt
-│
-├── service/
-│     ├── __init__.py
-│     └── service.py
-│
-├── templates/
-│     ├── base.html
-│     ├── chart.html
-│     ├── data.html
-│     ├── index.html
-│     └── pie.html
-│
-└── static/
-      ├── chart.png
-      └── pie.png
-```
-
-## Architecture Diagram
-
-```           ┌───────────────────────┐
-              │      User Browser     │
-              └───────────▲───────────┘
-                          │
-                          │ HTTP Request
-                          │
-                 ┌────────┴─────────┐
-                 │  Flask (app.py)  │
-                 └────────▲─────────┘
-                          │
-                          │ Calls service layer
-                          │
-               ┌──────────┴──────────┐
-               │ DataService (service.py)
-               │ Loads Excel/CSV → DataFrame
-               └──────────▲──────────┘
-                          │
-                          │
-               ┌──────────┴──────────┐
-               │       Pandas        | 
-               │   DataFrame object  | 
-               └──────────▲──────────┘
-                          │
-                          │ Chart data
-                          │
-                          |
-             ┌────────────┴────────────┐
-             │      Matplotlib         |
-             │ Generates bar/pie charts|
-             └────────────▲────────────┘
-                          │
-                          │ Saved to static/
-                          │
-              ┌───────────┴────────────┐
-              │ Static Files (PNG)     |
-              └───────────▲────────────┘
-                          │
-                          │ Referenced in templates
-                          │
-             ┌────────────┴────────────┐
-             │     Jinja2 Templates    │
-             │   HTML for UI rendering │
-             └────────────▲────────────┘
-                          │
-                          │ Rendered page
-                          │
-                   ┌──────┴───────┐
-                   │   Browser    │
-                   └──────────────┘
-```
-
-## Design Notes
-
-- **Separation of concerns**  
-  Routes, data logic, and templates are separated for clarity.
-
-- **Data‑agnostic**  
-  The system works with most Excel/CSV formats without requiring a specific schema.
-
-- **Graceful fallback**  
-  If numeric columns don’t exist, the system automatically uses frequency-based charts.
-
-- **Easy to extend**
-  The data layer is isolated so it can switch to a database or API later.
+DATA_PATH=data.csv
