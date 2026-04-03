@@ -54,7 +54,6 @@ def pick_columns(df, x_override, y_override):
 
     return df, x, y
 
-
 # ---------------- DASHBOARD ----------------
 @app.route("/")
 def index():
@@ -62,43 +61,91 @@ def index():
         df = service.load_df()
         create_static()
 
-        # --- BAR ---
+        # ---------------- BAR ----------------
         bar_file = "dashboard_bar.png"
         plot.figure(figsize=(4, 3))
-        df.groupby(df.columns[0])[df.columns[1]].mean().head(5).plot(kind="bar")
+        (
+            df.groupby(df.columns[0])[df.columns[1]]
+            .mean()
+            .sort_values(ascending=False)
+            .head(5)
+            .plot(kind="bar", color="#3f6ad8")
+        )
         plot.tight_layout()
         plot.savefig(f"static/{bar_file}", dpi=120)
         plot.close()
 
-        # --- LINE ---
+        # ---------------- LINE ----------------
         line_file = "dashboard_line.png"
         plot.figure(figsize=(4, 3))
-        df.groupby(df.columns[0])[df.columns[1]].mean().head(5).plot(marker="o")
+        (
+            df.groupby(df.columns[0])[df.columns[1]]
+            .mean()
+            .sort_values(ascending=False)
+            .head(5)
+            .plot(marker="o", linewidth=2, color="#28a745")
+        )
         plot.tight_layout()
         plot.savefig(f"static/{line_file}", dpi=120)
         plot.close()
 
-        # --- PIE ---
+        # ---------------- PIE ----------------
         pie_file = "dashboard_pie.png"
         plot.figure(figsize=(4, 3))
-        df[df.columns[0]].value_counts().head(5).plot(kind="pie", autopct="%1.1f%%")
+        (
+            df[df.columns[0]]
+            .value_counts()
+            .head(5)
+            .plot(kind="pie", autopct="%1.1f%%")
+        )
+        plot.ylabel("")
         plot.tight_layout()
         plot.savefig(f"static/{pie_file}", dpi=120)
         plot.close()
 
+        # ---------------- SCATTER ----------------
+        scatter_file = "dashboard_scatter.png"
+        num_cols = df.select_dtypes(include="number").columns.tolist()
+        plot.figure(figsize=(4, 3))
+        plot.scatter(
+            df[num_cols[0]],
+            df[num_cols[1]],
+            alpha=0.6,
+            color="#17a2b8"
+        )
+        plot.xlabel(num_cols[0])
+        plot.ylabel(num_cols[1])
+        plot.tight_layout()
+        plot.savefig(f"static/{scatter_file}", dpi=120)
+        plot.close()
+
+        # ---------------- HEATMAP ----------------
+        heatmap_file = "dashboard_heatmap.png"
+        plot.figure(figsize=(4, 3))
+        sns.heatmap(
+            df.select_dtypes(include="number").corr(),
+            cmap="coolwarm",
+            annot=False
+        )
+        plot.tight_layout()
+        plot.savefig(f"static/{heatmap_file}", dpi=120)
+        plot.close()
+
+        # ---------------- RENDER ----------------
         return render_template(
             "index.html",
             bar_url=cache_bust(bar_file),
             line_url=cache_bust(line_file),
             pie_url=cache_bust(pie_file),
-            title="Dashboard"
+            scatter_url=cache_bust(scatter_file),
+            heatmap_url=cache_bust(heatmap_file),
+            title="Analytics Dashboard"
         )
 
     except Exception as e:
         logger.exception("Dashboard error")
         return render_template("index.html", error=str(e))
-
-# ---------------- DATA ----------------
+    
 @app.route("/data")
 def data():
     try:
