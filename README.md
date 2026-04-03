@@ -1,4 +1,4 @@
-# DNA_DVMS (DNA Data Visualization and Management System)
+# DVMS (Data Visualization and Management System)
 
 A simple data visualization and management system built with Flask.  
 The system reads data from Excel or CSV files, displays the dataset in a clean table view,  
