@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h3 class="mb-4">Analytics Dashboard</h3>
+
+<div class="row g-4">
+
+  <div class="col-md-4">
+    <div class="card shadow-sm">
+      <div class="card-header text-center fw-bold">Bar Chart</div>
+      <div class="card-body text-center">
+        <img src="{{ bar_url }}" class="img-fluid">
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="card shadow-sm">
+      <div class="card-header text-center fw-bold">Line Chart</div>
+      <div class="card-body text-center">
+        <img src="{{ line_url }}" class="img-fluid">
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="card shadow-sm">
+      <div class="card-header text-center fw-bold">Pie Chart</div>
+      <div class="card-body text-center">
+        <img src="{{ pie_url }}" class="img-fluid">
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}

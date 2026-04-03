@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ title or "DVMS" }}</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+
+<body>
+
+<nav class="navbar navbar-dark bg-dark">
+    <div class="container-fluid">
+        <span class="navbar-brand">DVMS</span>
+    </div>
+</nav>
+
+<div class="container-fluid">
+  <div class="row">
+
+    <!-- SIDEBAR -->
+    <aside class="col-md-2 bg-light border-end vh-100 p-3">
+      <h6 class="text-uppercase text-muted mb-3">Navigation</h6>
+
+      <ul class="nav nav-pills flex-column gap-2">
+
+        <li class="nav-item">
+          <a class="nav-link {% if request.endpoint=='index' %}active{% endif %}"
+             href="{{ url_for('index') }}">
+            Dashboard
+          </a>
+        </li>
+
+        <li class="nav-item">
+          <a class="nav-link {% if request.endpoint=='bar_chart' %}active{% endif %}"
+             href="{{ url_for('bar_chart') }}">
+            Bar Chart
+          </a>
+        </li>
+
+        <li class="nav-item">
+          <a class="nav-link {% if request.endpoint=='line_chart' %}active{% endif %}"
+             href="{{ url_for('line_chart') }}">
+            Line Chart
+          </a>
+        </li>
+
+        <li class="nav-item">
+          <a class="nav-link {% if request.endpoint=='scatter_chart' %}active{% endif %}"
+             href="{{ url_for('scatter_chart') }}">
+            Scatter Chart
+          </a>
+        </li>
+
+        <li class="nav-item">
+          <a class="nav-link {% if request.endpoint=='heatmap_chart' %}active{% endif %}"
+             href="{{ url_for('heatmap_chart') }}">
+            Heatmap
+          </a>
+        </li>
+
+        <li class="nav-item">
+          <a class="nav-link {% if request.endpoint=='pie' %}active{% endif %}"
+             href="{{ url_for('pie') }}">
+            Pie Chart
+          </a>
+        </li>
+
+        <li class="nav-item">
+          <a class="nav-link {% if request.endpoint=='data' %}active{% endif %}"
+             href="{{ url_for('data') }}">
+            Data
+          </a>
+        </li>
+
+      </ul>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="col-md-10 p-4">
+      {% block content %}{% endblock %}
+    </main>
+
+  </div>
+</div>
+
+<footer class="bg-dark text-white text-center py-3 mt-4">
+  All rights reserved 2026
+</footer>
+
+</body>
+</html>

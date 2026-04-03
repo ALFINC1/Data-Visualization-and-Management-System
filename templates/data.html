@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h4>Data Viewer</h4>
+
+<form class="mb-3">
+  <input type="text" name="search" value="{{ search }}" placeholder="Search..." class="form-control">
+</form>
+
+<table class="table table-sm table-striped">
+<thead>
+<tr>{% for c in columns %}<th>{{ c }}</th>{% endfor %}</tr>
+</thead>
+<tbody>
+{% for r in rows %}
+<tr>{% for v in r %}<td>{{ v }}</td>{% endfor %}</tr>
+{% endfor %}
+</tbody>
+</table>
+
+<nav>
+<a class="btn btn-outline-primary" href="?page={{ page-1 if page>1 else 1 }}">Prev</a>
+<a class="btn btn-outline-primary" href="?page={{ page+1 }}">Next</a>
+</nav>
+
+{% endblock %}
