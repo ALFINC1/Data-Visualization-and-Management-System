@@ -1,39 +1,42 @@
 {% extends "base.html" %}
+
 {% block content %}
 
-<h4 class="mb-3">Bar Chart</h4>
+<h4 class="mb-3">{{ title }}</h4>
 
 {% if error %}
-  <div class="alert alert-danger">{{ error }}</div>
-
+    <div class="alert alert-danger">
+        {{ error }}
+    </div>
 {% else %}
 
-  <p class="text-muted">
-    Showing <strong>{{ meta.y_col }}</strong> ({{ meta.agg }}) by
-    <strong>{{ meta.x_col }}</strong>. Top {{ meta.top_n }} categories.
-  </p>
+    {% if chart_url %}
+        <div class="card shadow-sm w-100 mb-3">
+            <div class="card-body text-center">
+                <img src="{{ chart_url }}" class="img-fluid" alt="Chart">
+            </div>
+        </div>
+    {% else %}
+        <div class="alert alert-warning">
+            Chart not available.
+        </div>
+    {% endif %}
 
-  {% if chart_url %}
-    <img src="{{ chart_url }}" class="img-fluid mb-3" alt="Bar Chart">
-  {% else %}
-    <div class="alert alert-warning">Chart could not be generated.</div>
-  {% endif %}
-
-  <div class="card shadow-sm mb-4">
-    <div class="card-body">
-      <h6>Summary</h6>
-      <ul class="list-unstyled small">
-        <li><strong>Total rows:</strong> {{ meta.rows_total }}</li>
-        <li><strong>Rows used:</strong> {{ meta.rows_used }}</li>
-        <li><strong>Distinct categories:</strong> {{ meta.distinct_x }}</li>
-        <li><strong>Min:</strong> {{ meta.y_min }}</li>
-        <li><strong>Mean:</strong> {{ meta.y_mean }}</li>
-        <li><strong>Max:</strong> {{ meta.y_max }}</li>
-      </ul>
-    </div>
-  </div>
-
-  <a href="{{ url_for('pie') }}" class="btn btn-primary">View Pie Chart</a>
+    {# ✅ Render metadata ONLY if it exists #}
+    {% if meta is defined and meta %}
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h6>Summary</h6>
+                <ul class="small mb-0">
+                    {% for key, value in meta.items() %}
+                        <li>
+                            <strong>{{ key }}:</strong> {{ value }}
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    {% endif %}
 
 {% endif %}
 

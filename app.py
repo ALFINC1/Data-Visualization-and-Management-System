@@ -20,7 +20,6 @@ DATA_PATH = os.getenv("DATA_PATH", "data.xlsx")
 service = DataService(DATA_PATH)
 
 
-# ---------------- HELPERS ----------------
 def create_static():
     os.makedirs("static", exist_ok=True)
 
@@ -54,14 +53,12 @@ def pick_columns(df, x_override, y_override):
 
     return df, x, y
 
-# ---------------- DASHBOARD ----------------
 @app.route("/")
 def index():
     try:
         df = service.load_df()
         create_static()
 
-        # ---------------- BAR ----------------
         bar_file = "dashboard_bar.png"
         plot.figure(figsize=(4, 3))
         (
@@ -75,7 +72,6 @@ def index():
         plot.savefig(f"static/{bar_file}", dpi=120)
         plot.close()
 
-        # ---------------- LINE ----------------
         line_file = "dashboard_line.png"
         plot.figure(figsize=(4, 3))
         (
@@ -89,7 +85,6 @@ def index():
         plot.savefig(f"static/{line_file}", dpi=120)
         plot.close()
 
-        # ---------------- PIE ----------------
         pie_file = "dashboard_pie.png"
         plot.figure(figsize=(4, 3))
         (
@@ -103,7 +98,6 @@ def index():
         plot.savefig(f"static/{pie_file}", dpi=120)
         plot.close()
 
-        # ---------------- SCATTER ----------------
         scatter_file = "dashboard_scatter.png"
         num_cols = df.select_dtypes(include="number").columns.tolist()
         plot.figure(figsize=(4, 3))
@@ -119,7 +113,6 @@ def index():
         plot.savefig(f"static/{scatter_file}", dpi=120)
         plot.close()
 
-        # ---------------- HEATMAP ----------------
         heatmap_file = "dashboard_heatmap.png"
         plot.figure(figsize=(4, 3))
         sns.heatmap(
@@ -131,7 +124,6 @@ def index():
         plot.savefig(f"static/{heatmap_file}", dpi=120)
         plot.close()
 
-        # ---------------- RENDER ----------------
         return render_template(
             "index.html",
             bar_url=cache_bust(bar_file),
@@ -146,22 +138,44 @@ def index():
         logger.exception("Dashboard error")
         return render_template("index.html", error=str(e))
     
+    
 @app.route("/data")
 def data():
     try:
         df = service.load_df()
+
+        page = int(request.args.get("page", 1))
+        per_page = 10
+        total = len(df)
+
+        start = (page - 1) * per_page
+        end = start + per_page
+
+        rows = df.iloc[start:end].values.tolist()
+
         return render_template(
             "data.html",
             columns=list(df.columns),
-            rows=df.values.tolist(),
+            rows=rows,
+            page=page,
+            total=total,
+            per_page=per_page,
             title="Data"
         )
+
     except Exception as e:
         logger.exception("Data route failed")
-        return render_template("data.html", error=str(e), rows=[], columns=[])
+        return render_template(
+            "data.html",
+            error=str(e),
+            columns=[],
+            rows=[],
+            page=1,
+            total=0,
+            per_page=10
+        )
 
 
-# ---------------- BAR ----------------
 @app.route("/bar")
 def bar_chart():
     try:
@@ -197,7 +211,6 @@ def bar_chart():
         return render_template("chart.html", error=str(e))
 
 
-# ---------------- LINE ----------------
 @app.route("/line")
 def line_chart():
     try:
@@ -233,7 +246,6 @@ def line_chart():
         return render_template("chart.html", error=str(e))
 
 
-# ---------------- SCATTER ----------------
 @app.route("/scatter")
 def scatter_chart():
     try:
@@ -265,7 +277,6 @@ def scatter_chart():
         return render_template("chart.html", error=str(e))
 
 
-# ---------------- HEATMAP ----------------
 @app.route("/heatmap")
 def heatmap_chart():
     try:
@@ -295,7 +306,6 @@ def heatmap_chart():
         return render_template("chart.html", error=str(e))
 
 
-# ---------------- PIE ----------------
 @app.route("/pie")
 def pie():
     try:

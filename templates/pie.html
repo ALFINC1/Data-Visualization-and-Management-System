@@ -1,36 +1,36 @@
 {% extends "base.html" %}
+
 {% block content %}
-<h4 class="mb-3">Pie Chart</h4>
+
+<h4 class="mb-3">{{ title }}</h4>
 
 {% if error %}
-  <div class="alert alert-danger">{{ error }}</div>
-
-{% else %}
-  <p class="text-muted">
-    Showing distribution of <strong>{{ meta.label_col }}</strong>.
-    Mode: <strong>{{ meta.mode }}</strong>.
-  </p>
-
-  {% if pie_url %}
-    <img src="{{ pie_url }}" class="img-fluid border shadow-sm mb-3">
-  {% else %}
-    <div class="alert alert-warning">Pie chart not available.</div>
-  {% endif %}
-
-  <div class="card shadow-sm">
-    <div class="card-body">
-      <h6>Summary</h6>
-      <ul class="small list-unstyled">
-        <li><strong>Labels shown:</strong> {{ meta.distinct_labels }}</li>
-        <li><strong>Rows used:</strong> {{ meta.rows_used }}</li>
-        <li><strong>Total rows:</strong> {{ meta.total_rows }}</li>
-      </ul>
+    <div class="alert alert-danger">
+        {{ error }}
     </div>
-  </div>
+{% else %}
+
+    {% if pie_url %}
+        <div class="card shadow-sm w-100 mb-3">
+            <div class="card-body text-center">
+                <img src="{{ pie_url }}" class="img-fluid">
+            </div>
+        </div>
+    {% endif %}
+
+    {% if meta is defined and meta %}
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h6>Summary</h6>
+                <ul class="small mb-0">
+                    {% for key, value in meta.items() %}
+                        <li><strong>{{ key }}:</strong> {{ value }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    {% endif %}
 
 {% endif %}
-
-<br>
-<a class="btn btn-primary" href="/chart">View Bar Chart</a>
 
 {% endblock %}
