@@ -154,7 +154,7 @@ def data():
         df = service.load_df()
 
         page = int(request.args.get("page", 1))
-        per_page = 10
+        per_page = 18
         total = len(df)
 
         start = (page - 1) * per_page
