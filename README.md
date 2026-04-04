@@ -1,9 +1,21 @@
-# DVMS
+# DVMS  
 
-**Data Visualization and Management System**
+## Data Visualization and Management System
 
-DNA‑DVMS is a modern, extensible data visualization and analytics dashboard built with **Flask**, **Pandas**, and **Matplotlib**.  
-The system ingests Excel or CSV datasets, provides an interactive dashboard overview, and supports multiple analytical visualizations with a professional UI inspired by enterprise BI tools.
+DVMS (Data Visualization and Management System) is a modern, extensible analytics dashboard built with **Flask**, **Pandas**, **Matplotlib**, and **Seaborn**.  
+It ingests Excel or CSV datasets, provides a clean analytics dashboard, and supports multiple professional‑grade visualizations following enterprise BI design principles.
+
+---
+
+## Overview
+
+DVMS bridges the gap between raw data and actionable insight.  
+It emphasizes **clarity, hierarchy, and usability**, ensuring that users can explore datasets effectively without visual clutter.
+
+The system separates:
+
+- **Dashboard view** → high‑level overview  
+- **Detail views** → focused analytical exploration  
 
 ---
 
@@ -11,47 +23,70 @@ The system ingests Excel or CSV datasets, provides an interactive dashboard over
 
 ### Data Ingestion & Management
 
-- Load data from **Excel (.xlsx / .xls)** or **CSV (.csv)** files
-- Environment‑based dataset configuration via `DATA_PATH`
-- Data‑agnostic (no fixed schema required)
+- Load datasets from:
+  - `.xlsx` (Excel)
+  - `.xls` (Legacy Excel)
+  - `.csv` (Comma‑separated values)
+- Environment‑based dataset configuration using `DATA_PATH`
+- Fully **data‑agnostic** (no fixed schema required)
 - Automatic detection of numeric and non‑numeric columns
-- Clean, Bootstrap‑styled data table view
+- Centralized data loading via a dedicated `DataService` layer
+
+---
+
+### Analytics Dashboard
+
+- Unified dashboard showing:
+  - Bar Chart
+  - Line Chart
+  - Pie Chart
+  - Scatter Plot
+  - Heatmap
+- Optimized for clarity:
+  - Top‑5 values by default
+  - Reduced visual noise
+  - Rotated x‑axis labels (40°)
+  - Smaller font sizes for dense labels
+  - Clean line charts without clutter
+- Responsive, card‑based layout using Bootstrap
+
+> The dashboard answers *what is happening*, while detail pages explain *why*.
 
 ---
 
 ### Visualization Capabilities
 
-DNA‑DVMS supports **multiple chart types**, each available both on the dashboard and as individual analytical pages:
+Each visualization is available both on the dashboard and as an individual analytical page.
 
-- **Bar Chart**
-  - Aggregated numeric values (mean)
-  - Frequency fallback when numeric data is unavailable
-- **Line Chart**
-  - Trend visualization over grouped categories
-- **Pie Chart**
-  - Distribution or frequency‑based visualization
-- **Scatter Plot**
-  - Correlation view between numeric variables
-- **Heatmap**
-  - Correlation matrix of numeric features (Seaborn‑powered)
+- **Bar Chart** → Aggregated numeric values (mean)  
+- **Line Chart** → Trend visualization across categories  
+- **Pie Chart** → Distribution and frequency analysis  
+- **Scatter Plot** → Correlation between numeric variables  
+- **Heatmap** → Correlation matrix of numeric columns  
 
-> All charts are rendered server‑side and saved as cache‑busted images to ensure the latest data is always displayed.
+All charts:
+
+- Rendered **server‑side**
+- Saved as **PNG files**
+- Cache‑busted automatically for freshness
 
 ---
 
-### Interactive Analytics Dashboard
+### Data Table View
 
-- Unified **Analytics Dashboard** displaying:
-  - Bar, Line, Pie, Scatter, and Heatmap charts together
-- Card‑based responsive layout (Bootstrap grid)
-- Light gray analytics background with white chart cards
-- Professional color palette inspired by enterprise dashboards
+- Clean, professional table design
+- Styled with:
+  - Blue header
+  - Blue cell borders
+  - Hover highlighting
+- Pagination enabled (15 rows per page)
+- Usable even with large datasets
 
 ---
 
 ### Navigation & UI
 
-- **Vertical sidebar navigation** with:
+- Vertical sidebar navigation:
   - Dashboard
   - Bar Chart
   - Line Chart
@@ -59,15 +94,14 @@ DNA‑DVMS supports **multiple chart types**, each available both on the dashboa
   - Heatmap
   - Pie Chart
   - Data Table
-- **Sidebar toggle button**:
-  - Collapse / expand navigation for focused analysis
-  - Improves usability on smaller screens
-- Active link highlighting
-- Consistent layout using a shared base template
+- Sidebar toggle button (collapse/expand)
+- Active navigation highlighting
+- Unified brand color system
+- Clean typography and spacing
 
 ---
 
-### Project Structure
+## Project Structure
 
 DVMS/
 │  app.py
@@ -87,72 +121,68 @@ DVMS/
 │   └── pie.html
 │
 └── static/
+    ├── dashboard_bar.png
+    ├── dashboard_line.png
+    ├── dashboard_pie.png
+    ├── dashboard_scatter.png
+    ├── dashboard_heatmap.png
     ├── bar.png
     ├── line.png
     ├── scatter.png
     ├── heatmap.png
-    ├── pie.png
-
-### Architecture & Design
-
-- Clear **separation of concerns**:
-  - Routing (Flask)
-  - Data loading (DataService)
-  - Visualization (Matplotlib / Seaborn)
-  - UI rendering (Jinja2 + Bootstrap)
-- Reusable chart rendering template
-- Graceful fallback when required data types are missing
-- Easily extensible for:
-  - Database integration
-  - REST APIs
-  - Interactive charts (Chart.js / Plotly)
-  - Drill‑down analytics
-
-┌──────────────────────────┐
-│        Web Browser       │
-└────────────▲─────────────┘
-             │ HTTP Requests
-┌────────────┴─────────────┐
-│        Flask App         │
-│         (app.py)         │
-└────────────▲─────────────┘
-             │
-┌────────────┴─────────────┐
-│      DataService         │
-│  Load Excel / CSV files  │
-└────────────▲─────────────┘
-             │
-┌────────────┴─────────────┐
-│        Pandas            │
-│       DataFrame          │
-└────────────▲─────────────┘
-             │
-┌────────────┴─────────────┐
-│   Matplotlib / Seaborn   │
-│  Chart image generation  │
-└────────────▲─────────────┘
-             │
-┌────────────┴─────────────┐
-│      Static PNG Files    │
-└────────────▲─────────────┘
-             │
-┌────────────┴─────────────┐
-│     Jinja2 Templates     │
-│  Dashboard & UI Rendering│
-└────────────▲─────────────┘
-             │
-        Rendered HTML Page
-
+    └── pie.png
 
 ---
 
-## Supported Data Formats
+## Architecture & Design
 
-- `.xlsx` (Excel)
-- `.xls` (Legacy Excel)
-- `.csv` (Comma‑Separated Values)
+DVMS follows a clear **separation of concerns**:
 
-To use a CSV or custom file, set:
+- **Flask (Routing & Controllers)** → Handles HTTP requests and rendering  
+- **DataService (Data Layer)** → Loads Excel/CSV into Pandas DataFrames  
+- **Pandas (Processing)** → Aggregation, grouping, filtering, pagination  
+- **Matplotlib / Seaborn (Visualization)** → Chart generation  
+- **Jinja2 Templates (UI Layer)** → Consistent, reusable frontend layout  
 
-```bash
-DATA_PATH=data.csv
+### Flow Diagram
+
+Browser  
+↓ HTTP Request  
+Flask (app.py)  
+↓  
+DataService → Pandas DataFrame  
+↓  
+Matplotlib / Seaborn  
+↓  
+Static PNG Images  
+↓  
+Jinja2 Templates  
+↓  
+Rendered Analytics Dashboard  
+
+---
+
+## Design Principles
+
+- **Dashboard ≠ Detailed Analysis** → Overview first, details on demand  
+- **Reduced Visual Noise** → Fewer labels, consistent colors, clean axes  
+- **Semantic Visualization** → Explicit X and Y axis labels  
+- **Consistency & Reusability** → Shared base template across all pages  
+- **Scalability Ready** → Extendable to:
+  - Databases
+  - REST APIs
+  - Interactive chart libraries (Chart.js / Plotly)
+  - Drill‑down analytics
+
+---
+
+## Running the Project
+
+Install dependencies:
+pip install -r requirements.txt
+
+Run the application:
+python app.py
+
+Open in browser:
+http://127.0.0.1:5000/
