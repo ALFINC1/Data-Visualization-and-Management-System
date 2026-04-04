@@ -70,6 +70,30 @@
             border-bottom: none;
         }
 
+        /* ---- Filter Bar ---- */
+        .filter-bar {
+            background: #ffffff;
+            border: 1px solid rgba(0,0,0,0.06);
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 14px;
+        }
+
+        .filter-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-soft);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .filter-actions .btn {
+            border-radius: 8px;
+        }
+
+        /* Footer */
         .dvms-footer {
             background-color: var(--brand-dark);
             color: #d6dbeb;
@@ -109,19 +133,93 @@
 <!-- Main Layout -->
 <div class="layout">
 
-    <!-- Sidebar -->
+    <!-- Sidebar (preserve current filters using **request.args) -->
     <aside class="sidebar p-3">
-        <a href="{{ url_for('index') }}" class="{% if request.endpoint=='index' %}active{% endif %}">Dashboard</a>
-        <a href="{{ url_for('bar_chart') }}" class="{% if request.endpoint=='bar_chart' %}active{% endif %}">Bar Chart</a>
-        <a href="{{ url_for('line_chart') }}" class="{% if request.endpoint=='line_chart' %}active{% endif %}">Line Chart</a>
-        <a href="{{ url_for('scatter_chart') }}" class="{% if request.endpoint=='scatter_chart' %}active{% endif %}">Scatter</a>
-        <a href="{{ url_for('heatmap_chart') }}" class="{% if request.endpoint=='heatmap_chart' %}active{% endif %}">Heatmap</a>
-        <a href="{{ url_for('pie') }}" class="{% if request.endpoint=='pie' %}active{% endif %}">Pie</a>
-        <a href="{{ url_for('data') }}" class="{% if request.endpoint=='data' %}active{% endif %}">Data</a>
+        <a href="{{ url_for('index', **request.args) }}" class="{% if request.endpoint=='index' %}active{% endif %}">Dashboard</a>
+        <a href="{{ url_for('bar_chart', **request.args) }}" class="{% if request.endpoint=='bar_chart' %}active{% endif %}">Bar Chart</a>
+        <a href="{{ url_for('line_chart', **request.args) }}" class="{% if request.endpoint=='line_chart' %}active{% endif %}">Line Chart</a>
+        <a href="{{ url_for('scatter_chart', **request.args) }}" class="{% if request.endpoint=='scatter_chart' %}active{% endif %}">Scatter</a>
+        <a href="{{ url_for('heatmap_chart', **request.args) }}" class="{% if request.endpoint=='heatmap_chart' %}active{% endif %}">Heatmap</a>
+        <a href="{{ url_for('pie', **request.args) }}" class="{% if request.endpoint=='pie' %}active{% endif %}">Pie</a>
+        <a href="{{ url_for('data', **request.args) }}" class="{% if request.endpoint=='data' %}active{% endif %}">Data</a>
     </aside>
 
     <!-- Content -->
     <main class="content">
+
+        <!-- ✅ Filters & Controls (Category / Date / Numeric Range) -->
+        <div class="filter-bar">
+            <div class="filter-title">
+                <i class="bi bi-funnel"></i>
+                Filters & Controls
+                <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" onclick="toggleFilters()">
+                    Toggle
+                </button>
+            </div>
+
+            <div id="filtersPanel">
+                <form class="row g-2 align-items-end" method="get" action="{{ request.path }}">
+
+                    <!-- Category Dropdown -->
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted mb-1">Category</label>
+                        <select name="category" class="form-select form-select-sm">
+                            <option value="">All</option>
+                            {% if categories is defined and categories %}
+                                {% for c in categories %}
+                                    <option value="{{ c }}" {% if request.args.get('category') == c %}selected{% endif %}>
+                                        {{ c }}
+                                    </option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                    </div>
+
+                    <!-- Date Dropdown (only shown if date_values exists) -->
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted mb-1">Date</label>
+                        <select name="date" class="form-select form-select-sm">
+                            <option value="">All</option>
+                            {% if date_values is defined and date_values %}
+                                {% for d in date_values %}
+                                    <option value="{{ d }}" {% if request.args.get('date') == d %}selected{% endif %}>
+                                        {{ d }}
+                                    </option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                    </div>
+
+                    <!-- Numeric Min -->
+                    <div class="col-md-2">
+                        <label class="form-label small text-muted mb-1">Min</label>
+                        <input type="number" step="any" name="min" class="form-control form-control-sm"
+                               value="{{ request.args.get('min','') }}"
+                               placeholder="{% if y_min is defined and y_min is not none %}{{ y_min }}{% else %}Min{% endif %}">
+                    </div>
+
+                    <!-- Numeric Max -->
+                    <div class="col-md-2">
+                        <label class="form-label small text-muted mb-1">Max</label>
+                        <input type="number" step="any" name="max" class="form-control form-control-sm"
+                               value="{{ request.args.get('max','') }}"
+                               placeholder="{% if y_max is defined and y_max is not none %}{{ y_max }}{% else %}Max{% endif %}">
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="col-md-2 filter-actions d-grid gap-2">
+                        <button class="btn btn-primary btn-sm" type="submit">
+                            Apply
+                        </button>
+                        <a class="btn btn-outline-secondary btn-sm" href="{{ request.path }}">
+                            Clear
+                        </a>
+                    </div>
+
+                </form>
+            </div>
+        </div>
+
         {% block content %}{% endblock %}
     </main>
 </div>
@@ -129,17 +227,28 @@
 <!-- Footer -->
 <footer class="dvms-footer">
     <div class="footer-inner py-3">
-        © <span id="year"></span> Fadil Ahmed. 
-            <a href="https://www.linkedin.com/in/fadilahmed123" target="_blank"><i class="bi bi-linkedin"></i></a>
-            <a href="https://github.com/ALFINC1" target="_blank"><i class="bi bi-github"></i></a>
-            <a href="https://t.me/ALFINC1" target="_blank"><i class="bi bi-telegram"></i></a>
-        </div>
+        © <span id="year"></span> Fadil Ahmed.
+        <span class="footer-icons ms-2">
+            <a href="https://www.linkedin.com/in/fadilahmed123" target="_blank" aria-label="LinkedIn">
+                <i class="bi bi-linkedin"></i>
+            </a>
+            <a href="https://github.com/ALFINC1" target="_blank" aria-label="GitHub">
+                <i class="bi bi-github"></i>
+            </a>
+            <a href="https://t.me/ALFINC1" target="_blank" aria-label="Telegram">
+                <i class="bi bi-telegram"></i>
+            </a>
+        </span>
     </div>
 </footer>
 
 <script>
 function toggleSidebar() {
     document.body.classList.toggle("sidebar-collapsed");
+}
+function toggleFilters() {
+    const p = document.getElementById("filtersPanel");
+    p.style.display = (p.style.display === "none") ? "block" : "none";
 }
 document.getElementById("year").textContent = new Date().getFullYear();
 </script>

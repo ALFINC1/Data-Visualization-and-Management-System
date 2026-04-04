@@ -3,6 +3,10 @@
 
 <h5 class="mb-3 text-secondary">Analytics Dashboard</h5>
 
+{% if error %}
+  <div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
 <div class="row g-3">
 
     <div class="col-md-4">

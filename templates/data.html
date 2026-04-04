@@ -22,18 +22,29 @@
     </tbody>
 </table>
 
-<nav class="mt-3">
+{# ---------- Pagination that preserves filters ---------- #}
+{% set ns = namespace(qs='') %}
+{% for k, v in request.args.items() %}
+    {% if k != 'page' %}
+        {% if ns.qs %}
+            {% set ns.qs = ns.qs ~ '&' %}
+        {% endif %}
+        {% set ns.qs = ns.qs ~ (k|urlencode) ~ '=' ~ (v|urlencode) %}
+    {% endif %}
+{% endfor %}
+
+<nav class="mt-3 d-flex align-items-center gap-2">
     <a class="btn btn-outline-primary btn-sm"
-       href="?page={{ page-1 if page>1 else 1 }}">
+       href="{{ request.path }}?{% if ns.qs %}{{ ns.qs }}&{% endif %}page={{ page-1 if page>1 else 1 }}">
         Prev
     </a>
 
-    <span class="mx-2 text-muted">
+    <span class="mx-2 text-muted small">
         Page {{ page }}
     </span>
 
     <a class="btn btn-outline-primary btn-sm"
-       href="?page={{ page+1 if page*per_page < total else page }}">
+       href="{{ request.path }}?{% if ns.qs %}{{ ns.qs }}&{% endif %}page={{ page+1 if page*per_page < total else page }}">
         Next
     </a>
 </nav>
