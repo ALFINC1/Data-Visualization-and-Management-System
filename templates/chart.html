@@ -1,43 +1,32 @@
 {% extends "base.html" %}
-
 {% block content %}
 
-<h4 class="mb-3">{{ title }}</h4>
+<h5 class="mb-3 fw-semibold text-secondary">{{ title }}</h5>
 
 {% if error %}
-    <div class="alert alert-danger">
-        {{ error }}
-    </div>
+<div class="alert alert-danger">{{ error }}</div>
 {% else %}
 
-    {% if chart_url %}
-        <div class="card shadow-sm w-100 mb-3">
-            <div class="card-body text-center">
-                <img src="{{ chart_url }}" class="img-fluid" alt="Chart">
-            </div>
-        </div>
-    {% else %}
-        <div class="alert alert-warning">
-            Chart not available.
-        </div>
-    {% endif %}
+<div class="card mb-4">
+    <div class="card-body text-center">
+        <img src="{{ chart_url }}" class="img-fluid" alt="Chart">
+    </div>
+</div>
 
-    {# ✅ Render metadata ONLY if it exists #}
-    {% if meta is defined and meta %}
-        <div class="card shadow-sm">
-            <div class="card-body">
-                <h6>Summary</h6>
-                <ul class="small mb-0">
-                    {% for key, value in meta.items() %}
-                        <li>
-                            <strong>{{ key }}:</strong> {{ value }}
-                        </li>
-                    {% endfor %}
-                </ul>
-            </div>
-        </div>
-    {% endif %}
-
+{% if meta is defined and meta %}
+<div class="card bg-light">
+    <div class="card-body">
+        <h6 class="fw-semibold mb-2">Chart Summary</h6>
+        <ul class="small ps-3 mb-0">
+            {% for k, v in meta.items() %}
+            <li>
+                <strong>{{ k | replace('_',' ') | title }}:</strong> {{ v }}
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
 {% endif %}
 
+{% endif %}
 {% endblock %}

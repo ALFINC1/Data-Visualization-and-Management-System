@@ -1,51 +1,51 @@
 {% extends "base.html" %}
 {% block content %}
 
-<h4 class="mb-4">Analytics Dashboard</h4>
+<h5 class="mb-3 text-secondary">Analytics Dashboard</h5>
 
-<div class="row g-4">
+<div class="row g-3">
 
-    <div class="col-md-6 col-lg-4">
-        <div class="card shadow-sm">
-            <div class="card-header fw-semibold">Bar Chart</div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">Bar Chart</div>
             <div class="card-body text-center">
-                <img src="{{ bar_url }}" class="img-fluid">
+                <img src="{{ bar_url }}" class="img-fluid" alt="Bar Chart">
             </div>
         </div>
     </div>
 
-    <div class="col-md-6 col-lg-4">
-        <div class="card shadow-sm">
-            <div class="card-header fw-semibold">Line Chart</div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">Line Chart</div>
             <div class="card-body text-center">
-                <img src="{{ line_url }}" class="img-fluid">
+                <img src="{{ line_url }}" class="img-fluid" alt="Line Chart">
             </div>
         </div>
     </div>
 
-    <div class="col-md-6 col-lg-4">
-        <div class="card shadow-sm">
-            <div class="card-header fw-semibold">Pie Chart</div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">Pie Chart</div>
             <div class="card-body text-center">
-                <img src="{{ pie_url }}" class="img-fluid">
+                <img src="{{ pie_url }}" class="img-fluid" alt="Pie Chart">
             </div>
         </div>
     </div>
 
-    <div class="col-md-6 col-lg-6">
-        <div class="card shadow-sm">
-            <div class="card-header fw-semibold">Scatter Plot</div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Scatter Plot</div>
             <div class="card-body text-center">
-                <img src="{{ scatter_url }}" class="img-fluid">
+                <img src="{{ scatter_url }}" class="img-fluid" alt="Scatter Plot">
             </div>
         </div>
     </div>
 
-    <div class="col-md-6 col-lg-6">
-        <div class="card shadow-sm">
-            <div class="card-header fw-semibold">Heatmap</div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Heatmap</div>
             <div class="card-body text-center">
-                <img src="{{ heatmap_url }}" class="img-fluid">
+                <img src="{{ heatmap_url }}" class="img-fluid" alt="Heatmap">
             </div>
         </div>
     </div>

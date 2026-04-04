@@ -1,36 +1,16 @@
 {% extends "base.html" %}
-
 {% block content %}
 
-<h4 class="mb-3">{{ title }}</h4>
+<h5 class="mb-3 fw-semibold text-secondary">{{ title }}</h5>
 
 {% if error %}
-    <div class="alert alert-danger">
-        {{ error }}
-    </div>
+<div class="alert alert-danger">{{ error }}</div>
 {% else %}
-
-    {% if pie_url %}
-        <div class="card shadow-sm w-100 mb-3">
-            <div class="card-body text-center">
-                <img src="{{ pie_url }}" class="img-fluid">
-            </div>
-        </div>
-    {% endif %}
-
-    {% if meta is defined and meta %}
-        <div class="card shadow-sm">
-            <div class="card-body">
-                <h6>Summary</h6>
-                <ul class="small mb-0">
-                    {% for key, value in meta.items() %}
-                        <li><strong>{{ key }}:</strong> {{ value }}</li>
-                    {% endfor %}
-                </ul>
-            </div>
-        </div>
-    {% endif %}
-
+<div class="card">
+    <div class="card-body text-center">
+        <img src="{{ pie_url }}" class="img-fluid" alt="Pie Chart">
+    </div>
+</div>
 {% endif %}
 
 {% endblock %}
