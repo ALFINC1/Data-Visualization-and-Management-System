@@ -7,52 +7,106 @@
   <div class="alert alert-danger">{{ error }}</div>
 {% endif %}
 
+{% if kpis is defined and kpis %}
+<div class="row g-3 mb-3">
+  <div class="col-md-2"><div class="card"><div class="card-body text-center"><div class="small text-muted">Rows</div><div class="fw-bold">{{ kpis.rows }}</div></div></div></div>
+  <div class="col-md-2"><div class="card"><div class="card-body text-center"><div class="small text-muted">Columns</div><div class="fw-bold">{{ kpis.cols }}</div></div></div></div>
+  <div class="col-md-2"><div class="card"><div class="card-body text-center"><div class="small text-muted">Numeric</div><div class="fw-bold">{{ kpis.numeric_cols }}</div></div></div></div>
+  <div class="col-md-2"><div class="card"><div class="card-body text-center"><div class="small text-muted">Distinct</div><div class="fw-bold">{{ kpis.distinct_categories }}</div></div></div></div>
+  <div class="col-md-2"><div class="card"><div class="card-body text-center"><div class="small text-muted">Min</div><div class="fw-bold">{{ kpis.y_min }}</div></div></div></div>
+  <div class="col-md-2"><div class="card"><div class="card-body text-center"><div class="small text-muted">Max</div><div class="fw-bold">{{ kpis.y_max }}</div></div></div></div>
+</div>
+{% endif %}
+
+{# Preserve current query string for "Open" links #}
+{% set qs = request.query_string.decode('utf-8') %}
+{% set q = ('?' ~ qs) if qs else '' %}
+
+{% if top_categories is defined and top_categories %}
+<div class="mb-3">
+  <div class="small text-muted mb-1">Quick Drill‑Down (Top Categories)</div>
+  <div class="d-flex gap-2 flex-wrap">
+    {% for c in top_categories %}
+      <a class="btn btn-outline-primary btn-sm"
+         href="/drill?to=data&category={{ c|urlencode }}{% if qs %}&{{ qs }}{% endif %}">
+        {{ c }}
+      </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 <div class="row g-3">
 
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-header">Bar Chart</div>
-            <div class="card-body text-center">
-                <img src="{{ bar_url }}" class="img-fluid" alt="Bar Chart">
-            </div>
+  <!-- BAR -->
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-header">Bar Chart</div>
+      <div class="card-body text-center">
+        <img src="{{ bar_url }}" class="img-fluid" alt="Bar Chart">
+        <div class="mt-2">
+          <a class="btn btn-outline-secondary btn-sm" href="/bar{{ q }}">Open</a>
+          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('static', filename='dashboard_bar.png') }}" download>Download</a>
         </div>
+      </div>
     </div>
+  </div>
 
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-header">Line Chart</div>
-            <div class="card-body text-center">
-                <img src="{{ line_url }}" class="img-fluid" alt="Line Chart">
-            </div>
+  <!-- LINE -->
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-header">Line Chart</div>
+      <div class="card-body text-center">
+        <img src="{{ line_url }}" class="img-fluid" alt="Line Chart">
+        <div class="mt-2">
+          <a class="btn btn-outline-secondary btn-sm" href="/line{{ q }}">Open</a>
+          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('static', filename='dashboard_line.png') }}" download>Download</a>
         </div>
+      </div>
     </div>
+  </div>
 
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-header">Pie Chart</div>
-            <div class="card-body text-center">
-                <img src="{{ pie_url }}" class="img-fluid" alt="Pie Chart">
-            </div>
+  <!-- PIE -->
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-header">Pie Chart</div>
+      <div class="card-body text-center">
+        <img src="{{ pie_url }}" class="img-fluid" alt="Pie Chart">
+        <div class="mt-2">
+          <a class="btn btn-outline-secondary btn-sm" href="/pie{{ q }}">Open</a>
+          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('static', filename='dashboard_pie.png') }}" download>Download</a>
         </div>
+      </div>
     </div>
+  </div>
 
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">Scatter Plot</div>
-            <div class="card-body text-center">
-                <img src="{{ scatter_url }}" class="img-fluid" alt="Scatter Plot">
-            </div>
+  <!-- SCATTER -->
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">Scatter Plot</div>
+      <div class="card-body text-center">
+        <img src="{{ scatter_url }}" class="img-fluid" alt="Scatter Plot">
+        <div class="mt-2">
+          <a class="btn btn-outline-secondary btn-sm" href="/scatter{{ q }}">Open</a>
+          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('static', filename='dashboard_scatter.png') }}" download>Download</a>
         </div>
+      </div>
     </div>
+  </div>
 
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">Heatmap</div>
-            <div class="card-body text-center">
-                <img src="{{ heatmap_url }}" class="img-fluid" alt="Heatmap">
-            </div>
+  <!-- HEATMAP -->
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">Heatmap</div>
+      <div class="card-body text-center">
+        <img src="{{ heatmap_url }}" class="img-fluid" alt="Heatmap">
+        <div class="mt-2">
+          <a class="btn btn-outline-secondary btn-sm" href="/heatmap{{ q }}">Open</a>
+          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('static', filename='dashboard_heatmap.png') }}" download>Download</a>
         </div>
+      </div>
     </div>
+  </div>
 
 </div>
 

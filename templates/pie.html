@@ -4,33 +4,46 @@
 <h5 class="mb-3 fw-semibold text-secondary">{{ title }}</h5>
 
 {% if error %}
-    <div class="alert alert-danger">{{ error }}</div>
+  <div class="alert alert-danger">{{ error }}</div>
 {% else %}
 
-    {% if pie_url %}
-        <div class="card mb-4">
-            <div class="card-body text-center">
-                <img src="{{ pie_url }}" class="img-fluid" alt="Pie Chart">
-            </div>
-        </div>
-    {% else %}
-        <div class="alert alert-warning">Pie chart not available.</div>
-    {% endif %}
+  {% if pie_url %}
+    <div class="card mb-3">
+      <div class="card-body text-center">
+        <img src="{{ pie_url }}" class="img-fluid" alt="Pie Chart">
+      </div>
+    </div>
 
-    {% if meta is defined and meta %}
-        <div class="card bg-light">
-            <div class="card-body">
-                <h6 class="fw-semibold mb-2">Summary</h6>
-                <ul class="small ps-3 mb-0">
-                    {% for k, v in meta.items() %}
-                        <li>
-                            <strong>{{ k | replace('_',' ') | title }}:</strong> {{ v }}
-                        </li>
-                    {% endfor %}
-                </ul>
-            </div>
-        </div>
-    {% endif %}
+    <div class="d-flex gap-2 flex-wrap mb-3">
+      {% if download_url is defined and download_url %}
+        <a class="btn btn-outline-primary btn-sm"
+           href="{{ download_url }}"
+           download="{{ download_name|default('pie.png') }}">
+          <i class="bi bi-download"></i> Download PNG
+        </a>
+      {% endif %}
+
+      <button class="btn btn-outline-secondary btn-sm" type="button" onclick="copyShareLink()">
+        <i class="bi bi-link-45deg"></i> Copy Link
+      </button>
+    </div>
+
+  {% else %}
+    <div class="alert alert-warning">Pie chart not available.</div>
+  {% endif %}
+
+  {% if meta is defined and meta %}
+    <div class="card bg-light">
+      <div class="card-body">
+        <h6 class="fw-semibold mb-2">Summary</h6>
+        <ul class="small ps-3 mb-0">
+          {% for k, v in meta.items() %}
+            <li><strong>{{ k | replace('_',' ') | title }}:</strong> {{ v }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  {% endif %}
 
 {% endif %}
 
