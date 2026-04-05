@@ -13,6 +13,7 @@ DVMS bridges the gap between raw data and actionable insight.
 It emphasizes **clarity, hierarchy, and usability**, ensuring users can explore datasets effectively without visual clutter.
 
 The system separates:
+
 - **Dashboard view** → high‑level overview (KPIs + summary charts)  
 - **Detail views** → focused analytical exploration (individual charts)  
 - **Data view** → searchable, sortable, paginated table  
@@ -33,6 +34,7 @@ The system separates:
 - Centralized data loading via a dedicated `DataService` layer
 
 ✅ **NEW**
+
 - **Upload dataset from the UI** (CSV/XLS/XLSX) and instantly activate it
 - **Reset dataset** to default data source
 
@@ -47,6 +49,7 @@ Filters are implemented using URL query parameters and apply consistently to:
 ✅ Data table
 
 Supported filters:
+
 - **Category filter** (dropdown)
 - **Date filter** (auto‑detects a date‑like column if present)
 - **Numeric range filter** (`min` / `max`)
@@ -58,6 +61,7 @@ The current filter state is always shareable through the URL.
 ### 3) Analytics Dashboard (Overview)
 
 Unified dashboard showing:
+
 - Bar Chart
 - Line Chart
 - Pie Chart
@@ -65,6 +69,7 @@ Unified dashboard showing:
 - Heatmap
 
 Dashboard optimized for clarity:
+
 - Top‑5 values by default
 - Reduced visual noise
 - Rotated x‑axis labels (40°)
@@ -73,6 +78,7 @@ Dashboard optimized for clarity:
 - Tight layout to avoid clipping / overlap
 
 ✅ **NEW**
+
 - **KPI cards** computed from the filtered dataset:
   - Rows, Columns, Numeric columns
   - Distinct categories
@@ -94,11 +100,13 @@ Each visualization is available both on the dashboard and as an individual analy
 - **Heatmap** → Correlation matrix of numeric columns (Seaborn‑powered)
 
 All charts:
+
 - Rendered **server‑side**
 - Saved as **PNG files**
 - Cache‑busted automatically for freshness
 
 ✅ **NEW**
+
 - **Download chart as PNG** from detail pages
 - Improved readability: axis labeling and rotation
 
@@ -114,6 +122,7 @@ All charts:
 - Pagination enabled (default 15 rows per page)
 
 ✅ **NEW**
+
 - **Search** across all table values
 - **Sort** by any column with **asc/desc**
 - **Export filtered data to CSV**
@@ -132,6 +141,7 @@ All charts:
   - Data Table
 
 ✅ **NEW**
+
 - Filter bar integrated into UI
 - Copy link / shareable dashboard state
 - Export controls (CSV + PDF)
@@ -143,6 +153,7 @@ All charts:
 ### 7) Sharing, Presets, Reports (Enterprise Features)
 
 ✅ **NEW**
+
 - **Copy Link** button: share the current dashboard/table/chart state (filters included)
 - **Saved Views / Presets (Bookmarks)**:
   - Save a named view
@@ -160,6 +171,7 @@ All charts:
 ## Endpoints Summary
 
 Core pages:
+
 - `/` → Dashboard
 - `/data` → Data table (search/sort/pagination)
 - `/bar` → Bar chart detail
@@ -169,19 +181,23 @@ Core pages:
 - `/pie` → Pie chart detail
 
 Exports:
+
 - `/export/data.csv` → Export filtered data table to CSV
 - `/export/report.pdf` → Export analytics report to PDF
 
 Upload / dataset:
+
 - `/upload` (POST) → Upload dataset and activate it
 - `/dataset/reset` → Reset dataset to default
 
 Presets:
+
 - `/presets/save` (POST) → Save current view
 - `/presets/apply/<preset_id>` → Apply saved view
 - `/presets/delete/<preset_id>` → Delete saved view
 
 Drill‑down:
+
 - `/drill?category=<value>&to=data` → Opens filtered data view
 - `/drill?category=<value>&to=dashboard` → Opens filtered dashboard view
 
@@ -224,4 +240,5 @@ DVMS/
 │
 └── storage/           (NEW)
     └── presets.json   saved views / bookmarks
+  
 ``
