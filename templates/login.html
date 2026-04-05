@@ -1,19 +1,24 @@
 {% extends "base.html" %}
 {% block content %}
-<h4 class="mb-3">Login</h4>
 
-<form method="post" class="card p-3" style="max-width:420px;">
+<h4 class="mb-3 text-center">Login</h4>
+
+<form method="post" class="card p-3 shadow-sm">
   <div class="mb-2">
     <label class="form-label">Username</label>
-    <input class="form-control" name="username" required>
+    <input class="form-control" name="username" required autocomplete="username">
   </div>
+
   <div class="mb-3">
     <label class="form-label">Password</label>
-    <input class="form-control" type="password" name="password" required>
+    <input class="form-control" type="password" name="password" required autocomplete="current-password">
   </div>
-  <button class="btn btn-primary">Login</button>
-  <p class="small text-muted mt-2 mb-0">
+
+  <button class="btn btn-primary w-100">Login</button>
+
+  <p class="small text-muted mt-2 mb-0 text-center">
     Default admin: <b>admin</b> / <b>admin123</b> (change via env variables)
   </p>
 </form>
+
 {% endblock %}
