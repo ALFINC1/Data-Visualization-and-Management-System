@@ -3,242 +3,381 @@ import time
 import json
 import uuid
 import logging
+import sqlite3
 import numpy as np
 import pandas as pd
-import seaborn as sns
+
 import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plot
+matplotlib.use("Agg")  # kept for compatibility; interactive charts use Plotly
+import matplotlib.pyplot as plt  # (not required, but harmless)
+
+import plotly.express as px
 
 from flask import (
-    Flask, render_template, url_for, request,
-    Response, redirect, flash, session, send_file
+    Flask, render_template, request, redirect, url_for,
+    flash, session, Response, send_file, has_request_context
 )
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
+
 from service.service import DataService
 
-# APP SETUP
+# ---------------- APP ----------------
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "dvms-dev-secret")
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s:  %(message)s")
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-DATA_PATH = os.getenv("DATA_PATH", "data.xlsx")
-
-ROTATION = 40
-FONT_SIZE = 6
+# ---------------- CONFIG ----------------
+DATA_PATH_DEFAULT = os.getenv("DATA_PATH", "data.xlsx")
 
 UPLOAD_DIR = "uploads"
-PRESETS_DIR = "storage"
-PRESETS_FILE = os.path.join(PRESETS_DIR, "presets.json")
+STORAGE_DIR = "storage"
+STATIC_DIR = "static"
+
+DB_PATH = os.path.join(STORAGE_DIR, "dvms.sqlite")
+DATA_TABLE = "dvms_data"   # active dataset table (replaced on upload)
+META_TABLE = "dvms_meta"   # stores active dataset info (safe at startup)
 
 ALLOWED_EXTENSIONS = {".csv", ".xls", ".xlsx"}
 
+# Default admin (override with environment variables)
+ADMIN_USER = os.getenv("ADMIN_USER", "admin")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")  # change in env for production
 
-# HELPERS
-def ensure_dirs():
-    os.makedirs("static", exist_ok=True)
+# ---------------- DIR / DB ----------------
+def init_dirs():
     os.makedirs(UPLOAD_DIR, exist_ok=True)
-    os.makedirs(PRESETS_DIR, exist_ok=True)
-    if not os.path.exists(PRESETS_FILE):
-        with open(PRESETS_FILE, "w", encoding="utf-8") as f:
-            json.dump([], f)
+    os.makedirs(STORAGE_DIR, exist_ok=True)
+    os.makedirs(STATIC_DIR, exist_ok=True)
 
+def db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
-def get_data_path():
-    return session.get("DATA_PATH_ACTIVE", DATA_PATH)
+def table_exists(name: str) -> bool:
+    conn = db()
+    try:
+        cur = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+            (name,)
+        )
+        return cur.fetchone() is not None
+    finally:
+        conn.close()
 
+def init_db():
+    init_dirs()
+    conn = db()
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS users(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS presets(
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                url TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                owner TEXT NOT NULL
+            )
+        """)
+        conn.execute(f"""
+            CREATE TABLE IF NOT EXISTS {META_TABLE}(
+                k TEXT PRIMARY KEY,
+                v TEXT NOT NULL
+            )
+        """)
+        conn.commit()
 
-def get_service():
-    return DataService(get_data_path())
+        # Ensure admin exists
+        cur = conn.execute("SELECT username FROM users WHERE username=?", (ADMIN_USER,))
+        if cur.fetchone() is None:
+            conn.execute(
+                "INSERT INTO users(username, password_hash, role) VALUES(?,?,?)",
+                (ADMIN_USER, generate_password_hash(ADMIN_PASSWORD), "admin")
+            )
+            conn.commit()
+            logger.info("Admin account created (change ADMIN_PASSWORD env for security).")
 
+    finally:
+        conn.close()
 
-def cache_bust(filename):
-    return url_for("static", filename=filename) + f"?v={int(time.time())}"
+# ---------------- META (no session required) ----------------
+def meta_get(key: str, default=None):
+    conn = db()
+    try:
+        row = conn.execute(f"SELECT v FROM {META_TABLE} WHERE k=?", (key,)).fetchone()
+        return row["v"] if row else default
+    finally:
+        conn.close()
 
+def meta_set(key: str, value: str):
+    conn = db()
+    try:
+        conn.execute(
+            f"INSERT INTO {META_TABLE}(k,v) VALUES(?,?) "
+            f"ON CONFLICT(k) DO UPDATE SET v=excluded.v",
+            (key, str(value))
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
-def pick_columns(df, x_override=None, y_override=None):
-    num = df.select_dtypes(include="number").columns.tolist()
-    nonnum = [c for c in df.columns if c not in num]
+# ---------------- AUTH HELPERS ----------------
+def current_user():
+    return session.get("user") if has_request_context() else None
 
-    y = y_override if (y_override and y_override in df.columns) else (num[0] if num else None)
-    x = x_override if (x_override and x_override in df.columns) else (nonnum[0] if nonnum else None)
+def current_role():
+    return session.get("role", "viewer") if has_request_context() else "viewer"
+
+def login_required():
+    return current_user() is not None
+
+def admin_required():
+    return (current_user() is not None) and (current_role() == "admin")
+
+# ---------------- DATASET HELPERS ----------------
+def active_data_path():
+    """
+    ✅ FIX: safe outside request context.
+    - During a request: use session (per-user selection)
+    - Outside a request: use META_TABLE stored value
+    - Fallback: default DATA_PATH_DEFAULT
+    """
+    if has_request_context():
+        return session.get("DATA_PATH_ACTIVE", meta_get("active_dataset_path", DATA_PATH_DEFAULT))
+    return meta_get("active_dataset_path", DATA_PATH_DEFAULT)
+
+def import_to_sqlite(path: str):
+    """
+    Loads Excel/CSV into pandas and writes to SQLite as dvms_data (replace).
+    Also updates meta table so startup never needs session.
+    """
+    ds = DataService(path)
+    df = ds.load_df().copy()
+    df.columns = [str(c).strip().replace(" ", "_") for c in df.columns]
+
+    conn = db()
+    try:
+        df.to_sql(DATA_TABLE, conn, if_exists="replace", index=False)
+        conn.commit()
+    finally:
+        conn.close()
+
+    meta_set("active_dataset_path", path)
+    meta_set("imported_at", str(int(time.time())))
+
+def ensure_dataset_imported():
+    """
+    ✅ FIX: never touches session.
+    Ensures DB table exists; imports DEFAULT dataset if missing.
+    """
+    init_db()
+    if not table_exists(DATA_TABLE):
+        import_to_sqlite(DATA_PATH_DEFAULT)
+
+def get_columns():
+    conn = db()
+    try:
+        rows = conn.execute(f"PRAGMA table_info({DATA_TABLE})").fetchall()
+        return [r["name"] for r in rows]
+    finally:
+        conn.close()
+
+def sample_df(limit=5000):
+    conn = db()
+    try:
+        return pd.read_sql_query(f"SELECT * FROM {DATA_TABLE} LIMIT {int(limit)}", conn)
+    finally:
+        conn.close()
+
+def pick_columns():
+    cols = get_columns()
+    df_sample = sample_df(400)
+    num = df_sample.select_dtypes(include="number").columns.tolist()
+    nonnum = [c for c in cols if c not in num]
+    x = nonnum[0] if nonnum else None
+    y = num[0] if num else None
     return x, y
 
-
-def detect_date_column(df):
-    for c in df.columns:
-        if pd.api.types.is_datetime64_any_dtype(df[c]):
-            return c
-    for c in df.columns:
-        if "date" in str(c).lower():
-            return c
-    for c in df.columns:
-        if "year" in str(c).lower():
+def detect_date_column():
+    cols = get_columns()
+    for c in cols:
+        lc = c.lower()
+        if "date" in lc or "year" in lc:
             return c
     return None
 
-
-def build_filter_options(df, x_col, y_col, date_col):
-    categories = []
-    if x_col and x_col in df.columns:
-        categories = df[x_col].dropna().astype(str).value_counts().index.tolist()
-
-    date_values = []
-    if date_col and date_col in df.columns:
-        s = df[date_col].dropna()
-        if pd.api.types.is_datetime64_any_dtype(s):
-            date_values = (
-                pd.to_datetime(s, errors="coerce").dropna()
-                .dt.strftime("%Y-%m-%d").value_counts().index.tolist()
-            )
-        else:
-            date_values = s.astype(str).value_counts().index.tolist()
-
-    y_min, y_max = None, None
-    if y_col and y_col in df.columns and pd.api.types.is_numeric_dtype(df[y_col]):
-        s = df[y_col].dropna()
-        if not s.empty:
-            y_min = float(s.min())
-            y_max = float(s.max())
-
-    return categories, date_values, y_min, y_max
-
-
-def current_filters():
-    return {
-        "category": request.args.get("category", "").strip(),
-        "date": request.args.get("date", "").strip(),
-        "min": request.args.get("min", "").strip(),
-        "max": request.args.get("max", "").strip(),
-        "search": request.args.get("search", "").strip(),
-        "sort": request.args.get("sort", "").strip(),
-        "order": request.args.get("order", "asc").strip().lower(),
-    }
-
-
-def _safe_float(s):
+# ---------------- FILTER / SEARCH / SORT ----------------
+def safe_float(s):
     try:
         return float(s)
     except:
         return None
 
+def build_where(x_col, y_col, date_col, scatter_cols=None):
+    where = []
+    params = []
 
-def apply_filters(df, x_col, y_col, date_col, scatter_cols=None):
     category = request.args.get("category", "").strip()
     date_val = request.args.get("date", "").strip()
-    min_val = request.args.get("min", "").strip()
-    max_val = request.args.get("max", "").strip()
+    mn = safe_float(request.args.get("min", "").strip()) if request.args.get("min") else None
+    mx = safe_float(request.args.get("max", "").strip()) if request.args.get("max") else None
+    search = request.args.get("search", "").strip().lower()
 
-    if category and x_col and x_col in df.columns:
-        df = df[df[x_col].astype(str) == category]
+    if category and x_col:
+        where.append(f"CAST({x_col} AS TEXT) = ?")
+        params.append(category)
 
-    if date_val and date_col and date_col in df.columns:
-        series = df[date_col]
-        if pd.api.types.is_datetime64_any_dtype(series):
-            dt = pd.to_datetime(series, errors="coerce")
-            df = df[dt.dt.strftime("%Y-%m-%d") == date_val]
-        else:
-            df = df[series.astype(str) == date_val]
-
-    mn = _safe_float(min_val) if min_val else None
-    mx = _safe_float(max_val) if max_val else None
+    if date_val and date_col:
+        where.append(f"CAST({date_col} AS TEXT) = ?")
+        params.append(date_val)
 
     if scatter_cols and len(scatter_cols) >= 2:
-        x_num, y_num = scatter_cols[0], scatter_cols[1]
+        a, b = scatter_cols[0], scatter_cols[1]
         if mn is not None:
-            df = df[(df[x_num] >= mn) & (df[y_num] >= mn)]
+            where.append(f"({a} >= ? AND {b} >= ?)")
+            params.extend([mn, mn])
         if mx is not None:
-            df = df[(df[x_num] <= mx) & (df[y_num] <= mx)]
-        return df
-
-    if y_col and y_col in df.columns and pd.api.types.is_numeric_dtype(df[y_col]):
-        if mn is not None:
-            df = df[df[y_col] >= mn]
-        if mx is not None:
-            df = df[df[y_col] <= mx]
-
-    return df
-
-
-def apply_search_sort(df):
-    search = request.args.get("search", "").strip().lower()
-    sort_col = request.args.get("sort", "").strip()
-    order = request.args.get("order", "asc").strip().lower()
+            where.append(f"({a} <= ? AND {b} <= ?)")
+            params.extend([mx, mx])
+    else:
+        if y_col:
+            if mn is not None:
+                where.append(f"{y_col} >= ?")
+                params.append(mn)
+            if mx is not None:
+                where.append(f"{y_col} <= ?")
+                params.append(mx)
 
     if search:
-        df = df[df.apply(lambda r: r.astype(str).str.lower().str.contains(search).any(), axis=1)]
+        cols = get_columns()
+        parts = []
+        for c in cols:
+            parts.append(f"LOWER(CAST({c} AS TEXT)) LIKE ?")
+            params.append(f"%{search}%")
+        where.append("(" + " OR ".join(parts) + ")")
 
-    if sort_col and sort_col in df.columns:
-        df = df.sort_values(by=sort_col, ascending=(order != "desc"))
+    clause = (" WHERE " + " AND ".join(where)) if where else ""
+    return clause, params
 
-    return df
+def build_filter_options(x_col, date_col):
+    conn = db()
+    try:
+        categories = []
+        if x_col:
+            df = pd.read_sql_query(
+                f"SELECT CAST({x_col} AS TEXT) AS v, COUNT(*) AS c "
+                f"FROM {DATA_TABLE} WHERE {x_col} IS NOT NULL "
+                f"GROUP BY v ORDER BY c DESC LIMIT 200",
+                conn
+            )
+            categories = df["v"].tolist()
 
+        date_values = []
+        if date_col:
+            df = pd.read_sql_query(
+                f"SELECT CAST({date_col} AS TEXT) AS v, COUNT(*) AS c "
+                f"FROM {DATA_TABLE} WHERE {date_col} IS NOT NULL "
+                f"GROUP BY v ORDER BY c DESC LIMIT 200",
+                conn
+            )
+            date_values = df["v"].tolist()
 
-def compute_kpis(df_filtered, x_col, y_col):
-    kpis = {
-        "rows": int(df_filtered.shape[0]),
-        "cols": int(df_filtered.shape[1]),
-        "numeric_cols": int(len(df_filtered.select_dtypes(include="number").columns)),
-        "distinct_categories": int(df_filtered[x_col].nunique()) if x_col and x_col in df_filtered.columns else 0,
-        "y_min": None,
-        "y_mean": None,
-        "y_max": None,
-    }
-    if y_col and y_col in df_filtered.columns and pd.api.types.is_numeric_dtype(df_filtered[y_col]):
-        s = df_filtered[y_col].dropna()
-        if not s.empty:
-            kpis["y_min"] = float(s.min())
-            kpis["y_mean"] = float(s.mean())
-            kpis["y_max"] = float(s.max())
-    return kpis
+        return categories, date_values
+    finally:
+        conn.close()
 
+# ---------------- CONTEXT ----------------
+def base_context():
+    x_col, y_col = pick_columns()
+    date_col = detect_date_column()
+    categories, date_values = build_filter_options(x_col, date_col)
 
-def load_presets():
-    ensure_dirs()
-    with open(PRESETS_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+    conn = db()
+    try:
+        presets = conn.execute("SELECT * FROM presets ORDER BY created_at DESC LIMIT 10").fetchall()
+    finally:
+        conn.close()
 
+    return dict(
+        user=current_user(),
+        role=current_role(),
+        active_data_path=active_data_path(),
+        categories=categories,
+        date_values=date_values,
+        presets=presets,
+        filters={
+            "category": request.args.get("category", ""),
+            "date": request.args.get("date", ""),
+            "min": request.args.get("min", ""),
+            "max": request.args.get("max", ""),
+            "search": request.args.get("search", ""),
+            "sort": request.args.get("sort", ""),
+            "order": request.args.get("order", "asc"),
+        },
+        share_url=request.url,
+        export_url=url_for("export_csv", **request.args.to_dict(flat=True))
+    )
 
-def save_presets(items):
-    ensure_dirs()
-    with open(PRESETS_FILE, "w", encoding="utf-8") as f:
-        json.dump(items, f, ensure_ascii=False, indent=2)
+# ---------------- AUTH ROUTES ----------------
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    init_db()
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "").strip()
 
+        conn = db()
+        try:
+            user = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+        finally:
+            conn.close()
 
-def base_context(df, x_col, y_col, date_col):
-    categories, date_values, y_min, y_max = build_filter_options(df, x_col, y_col, date_col)
-    return {
-        "categories": categories,
-        "date_values": date_values,
-        "y_min": y_min,
-        "y_max": y_max,
-        "filters": current_filters(),
-        "share_url": request.url,
-        "export_url": url_for("export_csv", **request.args.to_dict(flat=True)),
-        "active_data_path": get_data_path(),
-        "presets": load_presets(),
-    }
+        if not user or not check_password_hash(user["password_hash"], password):
+            flash("Invalid username or password.", "danger")
+            return redirect(url_for("login"))
 
+        session["user"] = user["username"]
+        session["role"] = user["role"]
+        flash(f"Welcome {user['username']}!", "success")
+        return redirect(url_for("index"))
 
-def _style_xticks():
-    plot.xticks(rotation=ROTATION, ha="right", fontsize=FONT_SIZE)
+    # allow login page even if not logged in
+    return render_template("login.html", **base_context(), title="Login")
 
+@app.route("/logout")
+def logout():
+    session.clear()
+    flash("Logged out.", "info")
+    return redirect(url_for("login"))
 
-# A) UPLOAD DATASET 
+# ---------------- UPLOAD (ADMIN) ----------------
 @app.route("/upload", methods=["POST"])
 def upload_dataset():
-    ensure_dirs()
+    if not admin_required():
+        flash("Admin only: upload datasets.", "danger")
+        return redirect(url_for("index"))
+
+    ensure_dataset_imported()
+
     f = request.files.get("file")
     if not f or f.filename.strip() == "":
         flash("No file selected.", "danger")
-        return redirect(request.referrer or url_for("index"))
+        return redirect(url_for("index"))
 
     ext = os.path.splitext(f.filename)[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
-        flash("Unsupported file type. Upload CSV, XLS, or XLSX.", "danger")
-        return redirect(request.referrer or url_for("index"))
+        flash("Unsupported type. Upload CSV/XLS/XLSX.", "danger")
+        return redirect(url_for("index"))
 
     name = secure_filename(f.filename)
     new_name = f"{int(time.time())}_{name}"
@@ -246,428 +385,343 @@ def upload_dataset():
     f.save(path)
 
     session["DATA_PATH_ACTIVE"] = path
-    flash(f"Dataset uploaded and activated: {new_name}", "success")
-    return redirect(url_for("index"))
+    import_to_sqlite(path)
 
+    flash("Dataset uploaded + imported into SQLite.", "success")
+    return redirect(url_for("index"))
 
 @app.route("/dataset/reset")
 def reset_dataset():
+    if not admin_required():
+        flash("Admin only: reset dataset.", "danger")
+        return redirect(url_for("index"))
+
     session.pop("DATA_PATH_ACTIVE", None)
-    flash("Dataset reset to default.", "info")
+    import_to_sqlite(DATA_PATH_DEFAULT)
+    flash("Dataset reset to default and re-imported.", "info")
     return redirect(url_for("index"))
 
-
-# B) SAVED VIEWS / PRESETS 
+# ---------------- PRESETS ----------------
 @app.route("/presets/save", methods=["POST"])
-def save_preset():
-    ensure_dirs()
+def preset_save():
+    if not admin_required():
+        flash("Admin only: save presets.", "danger")
+        return redirect(url_for("index"))
+
+    init_db()
     name = request.form.get("name", "").strip()
+    url = request.form.get("url", request.referrer or url_for("index", _external=True))
     if not name:
-        flash("Preset name is required.", "danger")
-        return redirect(request.referrer or url_for("index"))
+        flash("Preset name required.", "danger")
+        return redirect(url_for("index"))
 
-    preset = {
-        "id": str(uuid.uuid4()),
-        "name": name,
-        "url": request.form.get("url", request.referrer or url_for("index", _external=True)),
-        "created_at": int(time.time())
-    }
-
-    items = load_presets()
-    items.insert(0, preset)
-    save_presets(items)
+    pid = str(uuid.uuid4())
+    conn = db()
+    try:
+        conn.execute(
+            "INSERT INTO presets(id,name,url,created_at,owner) VALUES(?,?,?,?,?)",
+            (pid, name, url, int(time.time()), current_user())
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
     flash("Preset saved.", "success")
-    return redirect(request.referrer or url_for("index"))
-
+    return redirect(url_for("index"))
 
 @app.route("/presets/apply/<preset_id>")
-def apply_preset(preset_id):
-    items = load_presets()
-    p = next((x for x in items if x["id"] == preset_id), None)
+def preset_apply(preset_id):
+    init_db()
+    conn = db()
+    try:
+        p = conn.execute("SELECT * FROM presets WHERE id=?", (preset_id,)).fetchone()
+    finally:
+        conn.close()
     if not p:
         flash("Preset not found.", "danger")
         return redirect(url_for("index"))
     return redirect(p["url"])
 
-
 @app.route("/presets/delete/<preset_id>")
-def delete_preset(preset_id):
-    items = [x for x in load_presets() if x["id"] != preset_id]
-    save_presets(items)
+def preset_delete(preset_id):
+    if not admin_required():
+        flash("Admin only: delete presets.", "danger")
+        return redirect(url_for("index"))
+
+    conn = db()
+    try:
+        conn.execute("DELETE FROM presets WHERE id=?", (preset_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
     flash("Preset deleted.", "info")
-    return redirect(request.referrer or url_for("index"))
+    return redirect(url_for("index"))
 
-
-# C) EXPORT CSV 
+# ---------------- EXPORT CSV ----------------
 @app.route("/export/data.csv")
 def export_csv():
-    df = get_service().load_df()
-    x_col, y_col = pick_columns(df, request.args.get("x"), request.args.get("y"))
-    date_col = detect_date_column(df)
+    ensure_dataset_imported()
+    x_col, y_col = pick_columns()
+    date_col = detect_date_column()
 
-    df_f = apply_filters(df, x_col, y_col, date_col)
-    df_f = apply_search_sort(df_f)
+    clause, params = build_where(x_col, y_col, date_col)
 
-    csv_data = df_f.to_csv(index=False)
+    sort_col = request.args.get("sort", "").strip()
+    order = request.args.get("order", "asc").strip().lower()
+    cols = get_columns()
+
+    order_clause = ""
+    if sort_col and sort_col in cols:
+        order_clause = f" ORDER BY {sort_col} {'DESC' if order == 'desc' else 'ASC'}"
+
+    q = f"SELECT * FROM {DATA_TABLE}{clause}{order_clause}"
+    conn = db()
+    try:
+        df = pd.read_sql_query(q, conn, params=params)
+    finally:
+        conn.close()
+
+    csv_data = df.to_csv(index=False)
     filename = f"dvms_export_{int(time.time())}.csv"
+    return Response(csv_data, mimetype="text/csv",
+                    headers={"Content-Disposition": f"attachment; filename={filename}"})
 
-    return Response(
-        csv_data,
-        mimetype="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
-    )
-
-
-# C) EXPORT PDF REPORT 
+# ---------------- EXPORT PDF REPORT ----------------
 @app.route("/export/report.pdf")
 def export_report_pdf():
-    ensure_dirs()
+    ensure_dataset_imported()
     try:
         from reportlab.lib.pagesizes import A4
         from reportlab.pdfgen import canvas
-        from reportlab.lib.utils import ImageReader
     except Exception:
-        return Response("reportlab not installed. Add 'reportlab' to requirements.txt and install.", status=500)
+        return Response("reportlab missing. Add to requirements.txt.", status=500)
 
-    df = get_service().load_df()
-    x_col, y_col = pick_columns(df)
-    date_col = detect_date_column(df)
-    ctx = base_context(df, x_col, y_col, date_col)
-    df_filtered = apply_filters(df, x_col, y_col, date_col)
-
-    pdf_path = os.path.join("static", f"DVMS_Report_{int(time.time())}.pdf")
+    ctx = base_context()
+    pdf_path = os.path.join(STATIC_DIR, f"DVMS_Report_{int(time.time())}.pdf")
     c = canvas.Canvas(pdf_path, pagesize=A4)
-    width, height = A4
 
-    y = height - 40
     c.setFont("Helvetica-Bold", 16)
-    c.drawString(40, y, "DVMS Analytics Report")
-    y -= 22
+    c.drawString(40, 800, "DVMS Analytics Report")
 
     c.setFont("Helvetica", 10)
-    c.drawString(40, y, f"Dataset: {get_data_path()}")
-    y -= 14
-    c.drawString(40, y, f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-    y -= 18
+    c.drawString(40, 780, f"Dataset: {active_data_path()}")
+    c.drawString(40, 765, f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(40, y, "Filters:")
-    y -= 14
-    c.setFont("Helvetica", 10)
     f = ctx["filters"]
-    c.drawString(60, y, f"Category: {f.get('category') or 'All'}"); y -= 12
-    c.drawString(60, y, f"Date: {f.get('date') or 'All'}"); y -= 12
-    c.drawString(60, y, f"Min: {f.get('min') or '-'}  Max: {f.get('max') or '-'}"); y -= 18
+    c.drawString(40, 740, f"Category: {f.get('category') or 'All'}")
+    c.drawString(40, 725, f"Date: {f.get('date') or 'All'}")
+    c.drawString(40, 710, f"Min: {f.get('min') or '-'}   Max: {f.get('max') or '-'}")
 
-    if not df_filtered.empty and x_col and y_col:
-        kpis = compute_kpis(df_filtered, x_col, y_col)
-        c.setFont("Helvetica-Bold", 11)
-        c.drawString(40, y, "KPIs (filtered):")
-        y -= 14
-        c.setFont("Helvetica", 10)
-        c.drawString(60, y, f"Rows: {kpis['rows']}   Distinct: {kpis['distinct_categories']}"); y -= 12
-        c.drawString(60, y, f"Min: {kpis['y_min']}  Mean: {kpis['y_mean']}  Max: {kpis['y_max']}"); y -= 18
-
+    c.drawString(40, 680, "Open dashboard for interactive charts and drill-down.")
     c.setFont("Helvetica", 9)
     c.drawString(40, 30, "© 2026 Fadil Ahmed — DNA Technology")
-    c.save()
 
+    c.save()
     return send_file(pdf_path, as_attachment=True, download_name=os.path.basename(pdf_path))
 
-
-# D) DRILL DOWN 
+# ---------------- DRILL DOWN ----------------
 @app.route("/drill")
 def drill():
     category = request.args.get("category", "").strip()
-    to = request.args.get("to", "data").strip().lower()
+    target = request.args.get("to", "data").strip().lower()
 
     args = request.args.to_dict(flat=True)
     args.pop("to", None)
-
     if category:
         args["category"] = category
 
-    if to == "dashboard":
+    if target == "dashboard":
         return redirect(url_for("index", **args))
     return redirect(url_for("data", **args))
 
+# ---------------- INTERACTIVE CHART API ----------------
+@app.route("/api/chart/<chart_type>")
+def api_chart(chart_type):
+    ensure_dataset_imported()
+    x_col, y_col = pick_columns()
+    date_col = detect_date_column()
 
-# DASHBOARD
+    conn = db()
+    try:
+        clause, params = build_where(x_col, y_col, date_col)
+        df = pd.read_sql_query(f"SELECT * FROM {DATA_TABLE}{clause} LIMIT 5000", conn, params=params)
+    finally:
+        conn.close()
+
+    if df.empty:
+        return Response(json.dumps({"error": "No data"}), mimetype="application/json")
+
+    if chart_type == "bar":
+        g = df.groupby(x_col)[y_col].mean().sort_values(ascending=False).head(10).reset_index()
+        fig = px.bar(g, x=x_col, y=y_col, title="Bar Chart")
+    elif chart_type == "line":
+        g = df.groupby(x_col)[y_col].mean().sort_values(ascending=False).head(10).reset_index()
+        fig = px.line(g, x=x_col, y=y_col, title="Line Chart")
+    elif chart_type == "pie":
+        g = df[x_col].astype(str).value_counts().head(10).reset_index()
+        g.columns = [x_col, "count"]
+        fig = px.pie(g, names=x_col, values="count", title="Pie Chart")
+    elif chart_type == "scatter":
+        nums = df.select_dtypes(include="number")
+        if nums.shape[1] < 2:
+            return Response(json.dumps({"error": "Not enough numeric cols"}), mimetype="application/json")
+        fig = px.scatter(df, x=nums.columns[0], y=nums.columns[1], title="Scatter Plot")
+    elif chart_type == "heatmap":
+        nums = df.select_dtypes(include="number")
+        if nums.shape[1] < 2:
+            return Response(json.dumps({"error": "Not enough numeric cols"}), mimetype="application/json")
+        corr = nums.corr()
+        fig = px.imshow(corr, text_auto=False, title="Correlation Heatmap")
+    else:
+        return Response(json.dumps({"error": "Unknown chart type"}), mimetype="application/json")
+
+    return Response(fig.to_json(), mimetype="application/json")
+
+# ---------------- DASHBOARD ----------------
 @app.route("/")
 def index():
-    ensure_dirs()
-    try:
-        df = get_service().load_df()
-        x_col, y_col = pick_columns(df, request.args.get("x"), request.args.get("y"))
-        date_col = detect_date_column(df)
+    init_db()
+    ensure_dataset_imported()
 
-        ctx = base_context(df, x_col, y_col, date_col)
+    if not login_required():
+        return redirect(url_for("login"))
 
-        df_filtered = apply_filters(df, x_col, y_col, date_col)
-        ctx["kpis"] = compute_kpis(df_filtered, x_col, y_col)
+    ctx = base_context()
+    return render_template("index.html", **ctx, title="Analytics Dashboard")
 
-        if df_filtered.empty or x_col is None or y_col is None:
-            ctx.update(error="No data matches the selected filters.", title="Analytics Dashboard")
-            return render_template("index.html", **ctx)
-
-        ctx["top_categories"] = df_filtered[x_col].astype(str).value_counts().head(5).index.tolist()
-
-        # BAR
-        bar_file = "dashboard_bar.png"
-        plot.figure(figsize=(4, 3))
-        grouped = df_filtered.groupby(x_col)[y_col].mean().sort_values(ascending=False).head(5)
-        plot.bar(grouped.index.astype(str), grouped.values, color="#3f6ad8")
-        _style_xticks()
-        plot.tight_layout()
-        plot.savefig(f"static/{bar_file}", dpi=120, bbox_inches="tight")
-        plot.close()
-
-        # LINE
-        line_file = "dashboard_line.png"
-        plot.figure(figsize=(4, 3))
-        plot.plot(grouped.index.astype(str), grouped.values, linewidth=2, color="#3f6ad8")
-        _style_xticks()
-        plot.tight_layout()
-        plot.savefig(f"static/{line_file}", dpi=120, bbox_inches="tight")
-        plot.close()
-
-        # PIE
-        pie_file = "dashboard_pie.png"
-        plot.figure(figsize=(4, 3))
-        df_filtered[x_col].astype(str).value_counts().head(5).plot(kind="pie", autopct="%1.1f%%")
-        plot.ylabel("")
-        plot.tight_layout()
-        plot.savefig(f"static/{pie_file}", dpi=120, bbox_inches="tight")
-        plot.close()
-
-        # SCATTER
-        scatter_file = "dashboard_scatter.png"
-        num_cols = df_filtered.select_dtypes(include="number").columns.tolist()
-        plot.figure(figsize=(4, 3))
-        if len(num_cols) >= 2:
-            plot.scatter(df_filtered[num_cols[0]], df_filtered[num_cols[1]], alpha=0.6, color="#00a8a8")
-            plot.xlabel(num_cols[0], fontsize=FONT_SIZE)
-            plot.ylabel(num_cols[1], fontsize=FONT_SIZE)
-        plot.tight_layout()
-        plot.savefig(f"static/{scatter_file}", dpi=120, bbox_inches="tight")
-        plot.close()
-
-        # HEATMAP
-        heatmap_file = "dashboard_heatmap.png"
-        plot.figure(figsize=(4, 3))
-        num_df = df_filtered.select_dtypes(include="number")
-        if not num_df.empty:
-            sns.heatmap(num_df.corr(), cmap="coolwarm", annot=False)
-            _style_xticks()
-        plot.tight_layout()
-        plot.savefig(f"static/{heatmap_file}", dpi=120, bbox_inches="tight")
-        plot.close()
-
-        ctx.update(
-            bar_url=cache_bust(bar_file),
-            line_url=cache_bust(line_file),
-            pie_url=cache_bust(pie_file),
-            scatter_url=cache_bust(scatter_file),
-            heatmap_url=cache_bust(heatmap_file),
-            title="Analytics Dashboard",
-        )
-        return render_template("index.html", **ctx)
-
-    except Exception as e:
-        logger.exception("Dashboard error")
-        return render_template("index.html", error=str(e), title="Analytics Dashboard")
-
-
-# DATA TABLE 
+# ---------------- DATA TABLE ----------------
 @app.route("/data")
 def data():
-    ensure_dirs()
+    init_db()
+    ensure_dataset_imported()
+
+    if not login_required():
+        return redirect(url_for("login"))
+
+    x_col, y_col = pick_columns()
+    date_col = detect_date_column()
+    ctx = base_context()
+
+    clause, params = build_where(x_col, y_col, date_col)
+
+    sort_col = request.args.get("sort", "").strip()
+    order = request.args.get("order", "asc").strip().lower()
+    cols = get_columns()
+
+    order_clause = ""
+    if sort_col and sort_col in cols:
+        order_clause = f" ORDER BY {sort_col} {'DESC' if order == 'desc' else 'ASC'}"
+
+    page = int(request.args.get("page", 1))
+    per_page = 15
+    offset = (page - 1) * per_page
+
+    conn = db()
     try:
-        df = get_service().load_df()
-        x_col, y_col = pick_columns(df, request.args.get("x"), request.args.get("y"))
-        date_col = detect_date_column(df)
-
-        ctx = base_context(df, x_col, y_col, date_col)
-
-        df_filtered = apply_filters(df, x_col, y_col, date_col)
-        df_filtered = apply_search_sort(df_filtered)
-
-        page = int(request.args.get("page", 1))
-        per_page = 15
-        total = len(df_filtered)
-
-        start = (page - 1) * per_page
-        end = start + per_page
-
-        ctx.update(
-            columns=list(df_filtered.columns),
-            rows=df_filtered.iloc[start:end].values.tolist(),
-            page=page,
-            total=total,
-            per_page=per_page,
-            title="Data",
+        total = pd.read_sql_query(f"SELECT COUNT(*) AS c FROM {DATA_TABLE}{clause}", conn, params=params).loc[0, "c"]
+        df = pd.read_sql_query(
+            f"SELECT * FROM {DATA_TABLE}{clause}{order_clause} LIMIT ? OFFSET ?",
+            conn, params=params + [per_page, offset]
         )
-        return render_template("data.html", **ctx)
-
-    except Exception as e:
-        logger.exception("Data route failed")
-        return render_template("data.html", error=str(e), columns=[], rows=[], page=1, total=0, per_page=15, title="Data")
-
-
-# ROUTES 
-@app.route("/bar")
-def bar_chart():
-    df = get_service().load_df()
-    x_col, y_col = pick_columns(df, request.args.get("x"), request.args.get("y"))
-    date_col = detect_date_column(df)
-    ctx = base_context(df, x_col, y_col, date_col)
-
-    df_filtered = apply_filters(df, x_col, y_col, date_col)
-    if df_filtered.empty or not x_col or not y_col:
-        ctx.update(error="No data matches filters.", title="Bar Chart", chart_url=None)
-        return render_template("chart.html", **ctx)
-
-    grouped = df_filtered.groupby(x_col)[y_col].mean().sort_values(ascending=False).head(10)
-
-    plot.figure(figsize=(10, 5))
-    plot.bar(grouped.index.astype(str), grouped.values, color="#3f6ad8")
-    plot.xlabel(x_col)
-    plot.ylabel(f"{y_col} (Mean)")
-    _style_xticks()
-    plot.tight_layout()
-    plot.savefig("static/bar.png", dpi=130, bbox_inches="tight")
-    plot.close()
+    finally:
+        conn.close()
 
     ctx.update(
-        title="Bar Chart",
-        chart_url=cache_bust("bar.png"),
-        download_url=url_for("static", filename="bar.png"),
-        download_name="bar.png",
-        top_categories=grouped.index.astype(str).tolist(),
+        columns=cols,
+        rows=df.values.tolist(),
+        page=page,
+        total=int(total),
+        per_page=per_page
     )
-    return render_template("chart.html", **ctx)
+    return render_template("data.html", **ctx, title="Data")
 
+# ---------------- PROFILE PAGE ----------------
+@app.route("/profile")
+def profile():
+    init_db()
+    ensure_dataset_imported()
+
+    if not login_required():
+        return redirect(url_for("login"))
+
+    ctx = base_context()
+
+    df = sample_df(8000)
+    summary = {
+        "rows": int(df.shape[0]),
+        "cols": int(df.shape[1]),
+        "duplicates": int(df.duplicated().sum())
+    }
+
+    missing = (df.isna().sum()).to_dict()
+    dtypes = {c: str(df[c].dtype) for c in df.columns}
+
+    outliers = {}
+    for c in df.select_dtypes(include="number").columns:
+        s = df[c].dropna()
+        if len(s) < 10:
+            continue
+        q1 = s.quantile(0.25)
+        q3 = s.quantile(0.75)
+        iqr = q3 - q1
+        low = q1 - 1.5 * iqr
+        high = q3 + 1.5 * iqr
+        outliers[c] = int(((s < low) | (s > high)).sum())
+
+    col = request.args.get("col")
+    if not col:
+        num_cols = df.select_dtypes(include="number").columns.tolist()
+        col = num_cols[0] if num_cols else None
+
+    hist_json = None
+    if col and col in df.columns and pd.api.types.is_numeric_dtype(df[col]):
+        fig = px.histogram(df, x=col, nbins=30, title=f"Distribution: {col}")
+        hist_json = fig.to_json()
+
+    ctx.update(
+        summary=summary,
+        missing=missing,
+        dtypes=dtypes,
+        outliers=outliers,
+        hist_json=hist_json,
+        profile_col=col,
+        all_columns=df.columns.tolist()
+    )
+    return render_template("profile.html", **ctx, title="Data Profile")
+
+# ---------------- DETAIL CHART PAGES ----------------
+@app.route("/bar")
+def bar_chart():
+    if not login_required():
+        return redirect(url_for("login"))
+    return render_template("chart.html", **base_context(), chart_type="bar", title="Bar Chart")
 
 @app.route("/line")
 def line_chart():
-    df = get_service().load_df()
-    x_col, y_col = pick_columns(df, request.args.get("x"), request.args.get("y"))
-    date_col = detect_date_column(df)
-    ctx = base_context(df, x_col, y_col, date_col)
-
-    df_filtered = apply_filters(df, x_col, y_col, date_col)
-    if df_filtered.empty or not x_col or not y_col:
-        ctx.update(error="No data matches filters.", title="Line Chart", chart_url=None)
-        return render_template("chart.html", **ctx)
-
-    grouped = df_filtered.groupby(x_col)[y_col].mean().sort_values(ascending=False).head(10)
-
-    plot.figure(figsize=(10, 5))
-    plot.plot(grouped.index.astype(str), grouped.values, linewidth=2, color="#3f6ad8")
-    plot.xlabel(x_col)
-    plot.ylabel(y_col)
-    _style_xticks()
-    plot.tight_layout()
-    plot.savefig("static/line.png", dpi=130, bbox_inches="tight")
-    plot.close()
-
-    ctx.update(
-        title="Line Chart",
-        chart_url=cache_bust("line.png"),
-        download_url=url_for("static", filename="line.png"),
-        download_name="line.png",
-    )
-    return render_template("chart.html", **ctx)
-
+    if not login_required():
+        return redirect(url_for("login"))
+    return render_template("chart.html", **base_context(), chart_type="line", title="Line Chart")
 
 @app.route("/scatter")
 def scatter_chart():
-    df = get_service().load_df()
-    date_col = detect_date_column(df)
-
-    num_cols = df.select_dtypes(include="number").columns.tolist()
-    ctx = base_context(df, None, None, date_col)
-
-    if len(num_cols) < 2:
-        ctx.update(error="Not enough numeric columns for scatter plot.", title="Scatter Chart", chart_url=None)
-        return render_template("chart.html", **ctx)
-
-    df_filtered = apply_filters(df, None, None, date_col, scatter_cols=num_cols)
-
-    plot.figure(figsize=(8, 6))
-    plot.scatter(df_filtered[num_cols[0]], df_filtered[num_cols[1]], alpha=0.7, color="#00a8a8")
-    plot.xlabel(num_cols[0])
-    plot.ylabel(num_cols[1])
-    plot.tight_layout()
-    plot.savefig("static/scatter.png", dpi=130, bbox_inches="tight")
-    plot.close()
-
-    ctx.update(
-        title="Scatter Chart",
-        chart_url=cache_bust("scatter.png"),
-        download_url=url_for("static", filename="scatter.png"),
-        download_name="scatter.png",
-    )
-    return render_template("chart.html", **ctx)
-
+    if not login_required():
+        return redirect(url_for("login"))
+    return render_template("chart.html", **base_context(), chart_type="scatter", title="Scatter Plot")
 
 @app.route("/heatmap")
 def heatmap_chart():
-    df = get_service().load_df()
-    date_col = detect_date_column(df)
-    ctx = base_context(df, None, None, date_col)
-
-    df_filtered = apply_filters(df, None, None, date_col)
-    num_df = df_filtered.select_dtypes(include="number")
-    if num_df.empty:
-        ctx.update(error="No numeric data for heatmap.", title="Heatmap", chart_url=None)
-        return render_template("chart.html", **ctx)
-
-    plot.figure(figsize=(10, 8))
-    sns.heatmap(num_df.corr(), cmap="coolwarm", annot=False)
-    _style_xticks()
-    plot.tight_layout()
-    plot.savefig("static/heatmap.png", dpi=130, bbox_inches="tight")
-    plot.close()
-
-    ctx.update(
-        title="Heatmap",
-        chart_url=cache_bust("heatmap.png"),
-        download_url=url_for("static", filename="heatmap.png"),
-        download_name="heatmap.png",
-    )
-    return render_template("chart.html", **ctx)
-
+    if not login_required():
+        return redirect(url_for("login"))
+    return render_template("chart.html", **base_context(), chart_type="heatmap", title="Heatmap")
 
 @app.route("/pie")
-def pie():
-    df = get_service().load_df()
-    x_col, _ = pick_columns(df, request.args.get("x"), request.args.get("y"))
-    date_col = detect_date_column(df)
-    ctx = base_context(df, x_col, None, date_col)
-
-    df_filtered = apply_filters(df, x_col, None, date_col)
-    if df_filtered.empty or not x_col:
-        ctx.update(error="No data matches filters.", title="Pie Chart", pie_url=None)
-        return render_template("pie.html", **ctx)
-
-    plot.figure(figsize=(7, 7))
-    df_filtered[x_col].astype(str).value_counts().head(10).plot(kind="pie", autopct="%1.1f%%")
-    plot.ylabel("")
-    plot.tight_layout()
-    plot.savefig("static/pie.png", dpi=130, bbox_inches="tight")
-    plot.close()
-
-    ctx.update(
-        title="Pie Chart",
-        pie_url=cache_bust("pie.png"),
-        download_url=url_for("static", filename="pie.png"),
-        download_name="pie.png",
-    )
-    return render_template("pie.html", **ctx)
-
+def pie_chart():
+    if not login_required():
+        return redirect(url_for("login"))
+    return render_template("chart.html", **base_context(), chart_type="pie", title="Pie Chart")
 
 if __name__ == "__main__":
-    ensure_dirs()
+    init_db()
+    ensure_dataset_imported()
     app.run(debug=True)

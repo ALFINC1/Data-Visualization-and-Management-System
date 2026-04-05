@@ -9,12 +9,59 @@
 
 {% if kpis is defined and kpis %}
 <div class="row g-3 mb-3">
-  <div class="col-md-2"><div class="card"><div class="card-body text-center"><div class="small text-muted">Rows</div><div class="fw-bold">{{ kpis.rows }}</div></div></div></div>
-  <div class="col-md-2"><div class="card"><div class="card-body text-center"><div class="small text-muted">Columns</div><div class="fw-bold">{{ kpis.cols }}</div></div></div></div>
-  <div class="col-md-2"><div class="card"><div class="card-body text-center"><div class="small text-muted">Numeric</div><div class="fw-bold">{{ kpis.numeric_cols }}</div></div></div></div>
-  <div class="col-md-2"><div class="card"><div class="card-body text-center"><div class="small text-muted">Distinct</div><div class="fw-bold">{{ kpis.distinct_categories }}</div></div></div></div>
-  <div class="col-md-2"><div class="card"><div class="card-body text-center"><div class="small text-muted">Min</div><div class="fw-bold">{{ kpis.y_min }}</div></div></div></div>
-  <div class="col-md-2"><div class="card"><div class="card-body text-center"><div class="small text-muted">Max</div><div class="fw-bold">{{ kpis.y_max }}</div></div></div></div>
+  <div class="col-md-2">
+    <div class="card">
+      <div class="card-body text-center">
+        <div class="small text-muted">Rows</div>
+        <div class="fw-bold">{{ kpis.rows }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-2">
+    <div class="card">
+      <div class="card-body text-center">
+        <div class="small text-muted">Columns</div>
+        <div class="fw-bold">{{ kpis.cols }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-2">
+    <div class="card">
+      <div class="card-body text-center">
+        <div class="small text-muted">Numeric</div>
+        <div class="fw-bold">{{ kpis.numeric_cols }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-2">
+    <div class="card">
+      <div class="card-body text-center">
+        <div class="small text-muted">Distinct</div>
+        <div class="fw-bold">{{ kpis.distinct_categories }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-2">
+    <div class="card">
+      <div class="card-body text-center">
+        <div class="small text-muted">Min</div>
+        <div class="fw-bold">{{ kpis.y_min }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-2">
+    <div class="card">
+      <div class="card-body text-center">
+        <div class="small text-muted">Max</div>
+        <div class="fw-bold">{{ kpis.y_max }}</div>
+      </div>
+    </div>
+  </div>
 </div>
 {% endif %}
 
@@ -43,7 +90,7 @@
     <div class="card">
       <div class="card-header">Bar Chart</div>
       <div class="card-body text-center">
-        <img src="{{ bar_url }}" class="img-fluid" alt="Bar Chart">
+        {% if bar_url %}<img src="{{ bar_url }}" class="img-fluid" alt="Bar Chart">{% endif %}
         <div class="mt-2">
           <a class="btn btn-outline-secondary btn-sm" href="/bar{{ q }}">Open</a>
           <a class="btn btn-outline-primary btn-sm" href="{{ url_for('static', filename='dashboard_bar.png') }}" download>Download</a>
@@ -57,7 +104,7 @@
     <div class="card">
       <div class="card-header">Line Chart</div>
       <div class="card-body text-center">
-        <img src="{{ line_url }}" class="img-fluid" alt="Line Chart">
+        {% if line_url %}<img src="{{ line_url }}" class="img-fluid" alt="Line Chart">{% endif %}
         <div class="mt-2">
           <a class="btn btn-outline-secondary btn-sm" href="/line{{ q }}">Open</a>
           <a class="btn btn-outline-primary btn-sm" href="{{ url_for('static', filename='dashboard_line.png') }}" download>Download</a>
@@ -71,7 +118,7 @@
     <div class="card">
       <div class="card-header">Pie Chart</div>
       <div class="card-body text-center">
-        <img src="{{ pie_url }}" class="img-fluid" alt="Pie Chart">
+        {% if pie_url %}<img src="{{ pie_url }}" class="img-fluid" alt="Pie Chart">{% endif %}
         <div class="mt-2">
           <a class="btn btn-outline-secondary btn-sm" href="/pie{{ q }}">Open</a>
           <a class="btn btn-outline-primary btn-sm" href="{{ url_for('static', filename='dashboard_pie.png') }}" download>Download</a>
@@ -85,7 +132,7 @@
     <div class="card">
       <div class="card-header">Scatter Plot</div>
       <div class="card-body text-center">
-        <img src="{{ scatter_url }}" class="img-fluid" alt="Scatter Plot">
+        {% if scatter_url %}<img src="{{ scatter_url }}" class="img-fluid" alt="Scatter Plot">{% endif %}
         <div class="mt-2">
           <a class="btn btn-outline-secondary btn-sm" href="/scatter{{ q }}">Open</a>
           <a class="btn btn-outline-primary btn-sm" href="{{ url_for('static', filename='dashboard_scatter.png') }}" download>Download</a>
@@ -99,7 +146,7 @@
     <div class="card">
       <div class="card-header">Heatmap</div>
       <div class="card-body text-center">
-        <img src="{{ heatmap_url }}" class="img-fluid" alt="Heatmap">
+        {% if heatmap_url %}<img src="{{ heatmap_url }}" class="img-fluid" alt="Heatmap">{% endif %}
         <div class="mt-2">
           <a class="btn btn-outline-secondary btn-sm" href="/heatmap{{ q }}">Open</a>
           <a class="btn btn-outline-primary btn-sm" href="{{ url_for('static', filename='dashboard_heatmap.png') }}" download>Download</a>

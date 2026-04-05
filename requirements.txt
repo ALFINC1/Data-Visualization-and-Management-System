@@ -1,7 +1,9 @@
-Flask==2.3.3
-pandas==2.2.3
-numpy==2.1.0
-matplotlib==3.9.0
-openpyxl==3.1.2
-xlrd==2.0.1
+flask
+pandas
+matplotlib
+seaborn
 reportlab
+plotly
+openpyxl
+xlrd
+werkzeug
