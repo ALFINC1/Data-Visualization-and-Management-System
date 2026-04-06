@@ -7,13 +7,11 @@
   <div class="card-body">
     <form method="get" action="{{ request.path }}" class="row g-2 align-items-end">
 
-      <!-- Preserve filter fields from base filter bar -->
       <input type="hidden" name="category" value="{{ request.args.get('category','') }}">
       <input type="hidden" name="date" value="{{ request.args.get('date','') }}">
       <input type="hidden" name="min" value="{{ request.args.get('min','') }}">
       <input type="hidden" name="max" value="{{ request.args.get('max','') }}">
 
-      <!-- Reset to first page whenever table controls change -->
       <input type="hidden" name="page" value="1">
 
       <div class="col-md-4">

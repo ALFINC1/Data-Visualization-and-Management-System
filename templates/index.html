@@ -61,7 +61,6 @@
 
 <div class="row g-3">
 
-  <!-- BAR -->
   <div class="col-md-4">
     <div class="card">
       <div class="card-header">Bar Chart</div>
@@ -79,7 +78,6 @@
     </div>
   </div>
 
-  <!-- LINE -->
   <div class="col-md-4">
     <div class="card">
       <div class="card-header">Line Chart</div>
@@ -97,7 +95,6 @@
     </div>
   </div>
 
-  <!-- PIE -->
   <div class="col-md-4">
     <div class="card">
       <div class="card-header">Pie Chart</div>
@@ -115,7 +112,6 @@
     </div>
   </div>
 
-  <!-- SCATTER -->
   <div class="col-md-6">
     <div class="card">
       <div class="card-header">Scatter Plot</div>
@@ -133,7 +129,6 @@
     </div>
   </div>
 
-  <!-- HEATMAP -->
   <div class="col-md-6">
     <div class="card">
       <div class="card-header">Heatmap</div>
@@ -171,7 +166,6 @@ async function draw(divId, type){
 
   Plotly.newPlot(divId, obj.data, obj.layout, {responsive:true});
 
-  // click-to-drilldown
   el.on('plotly_click', function(data){
     if(!data.points || !data.points.length) return;
     const x = data.points[0].x;

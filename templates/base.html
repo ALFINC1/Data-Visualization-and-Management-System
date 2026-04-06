@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -12,70 +12,164 @@
     :root{
       --brand-dark:#2f4b7c;
       --brand-main:#3f6ad8;
-      --brand-bg:#f4f6f9;
-      --text-soft:#6c757d;
+
+      --bg: #f4f6f9;
+      --surface: #ffffff;
+      --surface-2: #ffffff;
+      --border: rgba(0,0,0,.08);
+
+      --text: #212529;
+      --text-soft: #6c757d;
+
+      --shadow: 0 1px 3px rgba(0,0,0,.08);
+      --link: var(--brand-main);
     }
 
-    body{ background:var(--brand-bg); margin:0; font-size:14px; }
-    .layout{ display:flex; min-height:calc(100vh - 56px); }
+    html[data-theme="dark"]{
+      --bg: #0f141b;
+      --surface: #151c26;
+      --surface-2: #111823;
+      --border: rgba(255,255,255,.10);
+
+      --text: #e9eef6;
+      --text-soft: rgba(233,238,246,.70);
+
+      --shadow: 0 2px 10px rgba(0,0,0,.35);
+      --link: #7aa2ff;
+    }
+
+    body{
+      background: var(--bg);
+      color: var(--text);
+      margin:0;
+      font-size:14px;
+    }
+
+    .layout{
+      display:flex;
+      min-height:calc(100vh - 56px);
+    }
 
     .sidebar{
-      width:240px; background:var(--brand-dark);
-      transition:width .3s ease; overflow:hidden;
+      width:240px;
+      background:var(--brand-dark);
+      transition:width .3s ease;
+      overflow:hidden;
     }
     .sidebar a{
-      color:#e1e5f2; text-decoration:none;
-      padding:8px 12px; border-radius:6px;
-      display:block; margin-bottom:6px;
+      color:#e1e5f2;
+      text-decoration:none;
+      padding:8px 12px;
+      border-radius:6px;
+      display:block;
+      margin-bottom:6px;
     }
-    .sidebar a.active,.sidebar a:hover{ background:var(--brand-main); color:#fff; }
+    .sidebar a.active,
+    .sidebar a:hover{
+      background:var(--brand-main);
+      color:#fff;
+    }
+
     .sidebar-collapsed .sidebar{ width:0; }
 
-    .content{ flex:1; padding:1.5rem; }
+    .content{
+      flex:1;
+      padding:1.5rem;
+    }
 
-    .card{ border:none; box-shadow:0 1px 3px rgba(0,0,0,.08); }
-    .card-header{ font-size:13px; font-weight:600; color:var(--text-soft); background:#fff; border-bottom:none; }
+    .card{
+      border:none;
+      box-shadow: var(--shadow);
+      background: var(--surface);
+      color: var(--text);
+    }
+    .card-header{
+      font-size:13px;
+      font-weight:600;
+      color: var(--text-soft);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
 
     .filter-bar{
-      background:#fff; border:1px solid rgba(0,0,0,.06);
-      border-radius:10px; padding:12px; margin-bottom:14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius:10px;
+      padding:12px;
+      margin-bottom:14px;
     }
     .filter-title{
-      font-size:13px; font-weight:600; color:var(--text-soft);
-      margin-bottom:10px; display:flex; align-items:center; gap:8px;
+      font-size:13px;
+      font-weight:600;
+      color: var(--text-soft);
+      margin-bottom:10px;
+      display:flex;
+      align-items:center;
+      gap:8px;
     }
 
     .dvms-footer{
-      background:var(--brand-dark); color:#d6dbeb;
+      background:var(--brand-dark);
+      color:#d6dbeb;
       border-top:1px solid rgba(255,255,255,.08);
     }
-    .footer-inner{ padding:10px 0; text-align:center; font-size:12px; }
+    .footer-inner{
+      padding:10px 0;
+      text-align:center;
+      font-size:12px;
+    }
     .footer-icons a{
-      color:#d3d8e9; margin:0 10px; font-size:16px;
+      color:#d3d8e9;
+      margin:0 10px;
+      font-size:16px;
       transition:color .2s ease, transform .2s ease;
     }
-    .footer-icons a:hover{ color:var(--brand-main); transform:translateY(-2px); }
+    .footer-icons a:hover{
+      color:var(--brand-main);
+      transform:translateY(-2px);
+    }
 
     .mini-btn{ padding:.25rem .5rem; font-size:.8rem; }
 
-    /* ✅ Login page centering (ONLY affects login page) */
     .login-shell{
       min-height: calc(100vh - 56px);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      padding: 1.5rem;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      padding:1.5rem;
     }
     .login-wrap{
-      width: 100%;
-      max-width: 460px;
+      width:100%;
+      max-width:460px;
+    }
+
+    .back-to-top{
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 999;
+      display:none;
+      border-radius: 999px;
+      box-shadow: var(--shadow);
+    }
+
+    html[data-theme="dark"] .form-control,
+    html[data-theme="dark"] .form-select,
+    html[data-theme="dark"] .input-group-text{
+      background: var(--surface-2);
+      color: var(--text);
+      border-color: var(--border);
+    }
+
+    html[data-theme="dark"] .table{
+      color: var(--text);
     }
   </style>
 </head>
 
 <body>
 
-{# ✅ Declare content block once, but don't auto-render it here #}
+{# Declare content block once, but do not auto-render it here #}
 {% if false %}
   {% block content %}{% endblock %}
 {% endif %}
@@ -85,12 +179,18 @@
 <nav class="navbar navbar-dark bg-dark">
   <div class="container-fluid">
     {% if not is_login_page %}
-      <button class="btn btn-outline-light me-3" onclick="toggleSidebar()">☰</button>
+      <button class="btn btn-outline-light me-3" onclick="toggleSidebar()" type="button">☰</button>
     {% endif %}
+
     <span class="navbar-brand">DVMS Analytics</span>
 
-    <!-- Auth status -->
     <div class="d-flex align-items-center gap-2">
+
+      <button id="themeToggle" class="btn btn-outline-light btn-sm" type="button" title="Toggle dark mode" aria-label="Toggle dark mode">
+        <i class="bi bi-moon-stars"></i>
+      </button>
+
+      <!-- Auth status -->
       {% if user is defined and user %}
         <span class="text-white small">{{ user }} ({{ role if role is defined else "viewer" }})</span>
         <a class="btn btn-outline-light btn-sm" href="/logout">
@@ -109,10 +209,8 @@
 
 {% if is_login_page %}
 
-  <!-- ✅ Minimal centered login layout (NO sidebar, NO filters, NO footer) -->
   <div class="login-shell">
     <div class="login-wrap">
-
       {% with msgs = get_flashed_messages(with_categories=true) %}
         {% if msgs %}
           {% for cat, msg in msgs %}
@@ -129,7 +227,6 @@
 
 {% else %}
 
-  <!-- ✅ Full dashboard layout -->
   <div class="layout">
 
     {# Preserve ALL query params across navigation #}
@@ -280,7 +377,6 @@
     </main>
   </div>
 
-  <!-- ✅ Footer only for non-login pages -->
   <footer class="dvms-footer">
     <div class="footer-inner py-4">
       © <span id="year"></span> Developed by Fadil Ahmed
@@ -294,20 +390,86 @@
 
 {% endif %}
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+
 <script>
-function toggleSidebar(){ document.body.classList.toggle("sidebar-collapsed"); }
+function toggleSidebar(){
+  document.body.classList.toggle("sidebar-collapsed");
+  try {
+    localStorage.setItem("dvms_sidebar", document.body.classList.contains("sidebar-collapsed") ? "1" : "0");
+  } catch(e){}
+}
+(function(){
+  try {
+    if(localStorage.getItem("dvms_sidebar") === "1"){
+      document.body.classList.add("sidebar-collapsed");
+    }
+  } catch(e){}
+})();
+
 function toggleFilters(){
   const p = document.getElementById("filtersPanel");
   p.style.display = (p.style.display === "none") ? "block" : "none";
 }
-document.getElementById("year").textContent = new Date().getFullYear();
+
+const y = document.getElementById("year");
+if(y) y.textContent = new Date().getFullYear();
 
 function copyShareLink(){
   const link = "{{ share_url|default(request.url) }}";
   navigator.clipboard.writeText(link).then(() => alert("Link copied!"))
     .catch(() => prompt("Copy this link:", link));
 }
+
+(function(){
+  const btn = document.getElementById("themeToggle");
+  const root = document.documentElement;
+
+  function setTheme(mode){
+    root.setAttribute("data-theme", mode);
+    try { localStorage.setItem("dvms_theme", mode); } catch(e){}
+    if(btn){
+      btn.innerHTML = (mode === "dark")
+        ? '<i class="bi bi-sun"></i>'
+        : '<i class="bi bi-moon-stars"></i>';
+      btn.title = (mode === "dark") ? "Switch to light mode" : "Switch to dark mode";
+    }
+  }
+
+  let saved = null;
+  try { saved = localStorage.getItem("dvms_theme"); } catch(e){}
+  if(saved){
+    setTheme(saved);
+  } else {
+    const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    setTheme(prefersDark ? "dark" : "light");
+  }
+
+  if(btn){
+    btn.addEventListener("click", function(){
+      const current = root.getAttribute("data-theme") || "light";
+      setTheme(current === "dark" ? "light" : "dark");
+    });
+  }
+})();
+</script>
+
+<button id="backToTop" class="btn btn-primary back-to-top" type="button" aria-label="Back to top">
+  <i class="bi bi-arrow-up"></i>
+</button>
+<script>
+(function(){
+  const btn = document.getElementById("backToTop");
+  if(!btn) return;
+
+  window.addEventListener("scroll", () => {
+    btn.style.display = (window.scrollY > 350) ? "inline-flex" : "none";
+  });
+
+  btn.addEventListener("click", () => window.scrollTo({top:0, behavior:"smooth"}));
+})();
 </script>
 
 </body>
 </html>
+``

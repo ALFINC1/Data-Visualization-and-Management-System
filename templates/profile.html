@@ -1,112 +1,312 @@
 {% extends "base.html" %}
 {% block content %}
 
-<h5 class="mb-3 text-secondary">Data Quality &amp; Profiling</h5>
+{% set total_missing = 0 %}
+{% for k, v in missing.items() %}
+  {% set total_missing = total_missing + v %}
+{% endfor %}
+
+{% set missing_pct = 0 %}
+{% if summary.rows and summary.cols and (summary.rows * summary.cols) > 0 %}
+  {% set missing_pct = (100 * total_missing / (summary.rows * summary.cols)) %}
+{% endif %}
+
+{# Estimate numeric vs non-numeric from dtype strings #}
+{% set numeric_cols = 0 %}
+{% set non_numeric_cols = 0 %}
+{% for col, dt in dtypes.items() %}
+  {% set dt_l = dt|lower %}
+  {% if 'int' in dt_l or 'float' in dt_l or 'double' in dt_l or 'number' in dt_l %}
+    {% set numeric_cols = numeric_cols + 1 %}
+  {% else %}
+    {% set non_numeric_cols = non_numeric_cols + 1 %}
+  {% endif %}
+{% endfor %}
+
+<div class="d-flex flex-wrap align-items-center justify-content-between mb-2">
+  <div>
+    <h5 class="mb-1 text-secondary">Data Quality &amp; Profiling</h5>
+    <div class="small text-muted">
+      Dataset:
+      <strong>{{ active_data_path if active_data_path is defined else "default" }}</strong>
+      {% if user is defined and user %}
+        · User: <strong>{{ user }}</strong>
+        · Role: <strong>{{ role if role is defined else "viewer" }}</strong>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 flex-wrap mt-2 mt-md-0">
+    {% if export_url is defined and export_url %}
+      <a class="btn btn-outline-primary btn-sm" href="{{ export_url }}">
+        <i class="bi bi-download"></i> Export CSV
+      </a>
+    {% endif %}
+
+    <a class="btn btn-outline-danger btn-sm" href="/export/report.pdf{{ '?' ~ request.query_string.decode('utf-8') if request.query_string else '' }}">
+      <i class="bi bi-filetype-pdf"></i> Export PDF
+    </a>
+
+    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="copyShareLink()">
+      <i class="bi bi-link-45deg"></i> Copy Link
+    </button>
+  </div>
+</div>
 
 <div class="row g-3 mb-3">
-  <div class="col-md-3">
-    <div class="card">
-      <div class="card-body text-center">
-        Rows<br><b>{{ summary.rows }}</b>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-md-3">
-    <div class="card">
-      <div class="card-body text-center">
-        Columns<br><b>{{ summary.cols }}</b>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-md-3">
-    <div class="card">
-      <div class="card-body text-center">
-        Duplicates<br><b>{{ summary.duplicates }}</b>
-      </div>
-    </div>
-  </div>
-</div>
-
-<h6 class="mt-3">Missing Values</h6>
-<div class="card mb-3">
-  <div class="card-body p-0">
-    <table class="table table-sm table-striped mb-0">
-      <thead>
-        <tr>
-          <th>Column</th>
-          <th>Missing</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for k, v in missing.items() %}
-          <tr>
-            <td>{{ k }}</td>
-            <td>{{ v }}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<h6 class="mt-3">Outliers (IQR method)</h6>
-<div class="card mb-3">
-  <div class="card-body p-0">
-    <table class="table table-sm table-striped mb-0">
-      <thead>
-        <tr>
-          <th>Column</th>
-          <th>Outliers</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for k, v in outliers.items() %}
-          <tr>
-            <td>{{ k }}</td>
-            <td>{{ v }}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<h6 class="mt-3">Histogram</h6>
-
-<form method="get" class="row g-2 mb-2">
-  <div class="col-md-4">
-    <select class="form-select form-select-sm" name="col">
-      {% for c in all_columns %}
-        <option value="{{ c }}" {% if profile_col == c %}selected{% endif %}>{{ c }}</option>
-      {% endfor %}
-    </select>
-  </div>
   <div class="col-md-2">
-    <button class="btn btn-primary btn-sm" type="submit">View</button>
+    <div class="card">
+      <div class="card-body text-center">
+        <div class="small text-muted">Rows</div>
+        <div class="fw-bold">{{ summary.rows }}</div>
+      </div>
+    </div>
   </div>
-</form>
 
-<div class="card">
-  <div class="card-body">
-    <div id="histDiv"></div>
+  <div class="col-md-2">
+    <div class="card">
+      <div class="card-body text-center">
+        <div class="small text-muted">Columns</div>
+        <div class="fw-bold">{{ summary.cols }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-2">
+    <div class="card">
+      <div class="card-body text-center">
+        <div class="small text-muted">Duplicates</div>
+        <div class="fw-bold">{{ summary.duplicates }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card">
+      <div class="card-body text-center">
+        <div class="small text-muted">Total Missing</div>
+        <div class="fw-bold">{{ total_missing }}</div>
+        <div class="small text-muted">{{ "%.2f"|format(missing_pct) }}% of all cells</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card">
+      <div class="card-body text-center">
+        <div class="small text-muted">Column Types</div>
+        <div class="fw-bold">{{ numeric_cols }} numeric · {{ non_numeric_cols }} non‑numeric</div>
+        <div class="small text-muted">Estimated from dtype</div>
+      </div>
+    </div>
   </div>
 </div>
 
-<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
-<script>
-  (function () {
-    const target = document.getElementById("histDiv");
+<div class="accordion" id="profileAccordion">
 
-    {% if hist_json %}
-      // hist_json is a JSON string created by Plotly's fig.to_json()
-      const fig = JSON.parse({{ hist_json | safe }});
-      Plotly.newPlot("histDiv", fig.data, fig.layout, {responsive: true});
-    {% else %}
-      target.innerHTML = "No numeric column available.";
-    {% endif %}
-  })();
+  <!-- Missing Values -->
+  <div class="accordion-item">
+    <h2 class="accordion-header" id="headingMissing">
+      <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseMissing" aria-expanded="true" aria-controls="collapseMissing">
+        Missing Values (per column)
+      </button>
+    </h2>
+    <div id="collapseMissing" class="accordion-collapse collapse show" aria-labelledby="headingMissing" data-bs-parent="#profileAccordion">
+      <div class="accordion-body">
+
+        <div class="row g-2 mb-2">
+          <div class="col-md-6">
+            <input id="missingSearch" class="form-control form-control-sm" placeholder="Search column name...">
+          </div>
+          <div class="col-md-6 small text-muted d-flex align-items-center">
+            Tip: Use search to quickly find specific columns.
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-body p-0">
+            <table class="table table-sm table-striped mb-0" id="missingTable">
+              <thead>
+                <tr>
+                  <th>Column</th>
+                  <th class="text-end">Missing</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for k, v in missing.items() %}
+                <tr>
+                  <td>{{ k }}</td>
+                  <td class="text-end">{{ v }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Outliers -->
+  <div class="accordion-item">
+    <h2 class="accordion-header" id="headingOutliers">
+      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOutliers" aria-expanded="false" aria-controls="collapseOutliers">
+        Outliers (IQR method)
+      </button>
+    </h2>
+    <div id="collapseOutliers" class="accordion-collapse collapse" aria-labelledby="headingOutliers" data-bs-parent="#profileAccordion">
+      <div class="accordion-body">
+
+        <div class="row g-2 mb-2">
+          <div class="col-md-6">
+            <input id="outlierSearch" class="form-control form-control-sm" placeholder="Search numeric column...">
+          </div>
+          <div class="col-md-6 small text-muted d-flex align-items-center">
+            Outliers are counted using the IQR (1.5×IQR) rule.
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-body p-0">
+            <table class="table table-sm table-striped mb-0" id="outlierTable">
+              <thead>
+                <tr>
+                  <th>Column</th>
+                  <th class="text-end">Outliers</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for k, v in outliers.items() %}
+                <tr>
+                  <td>{{ k }}</td>
+                  <td class="text-end">{{ v }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Types Summary -->
+  <div class="accordion-item">
+    <h2 class="accordion-header" id="headingTypes">
+      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTypes" aria-expanded="false" aria-controls="collapseTypes">
+        Column Types (dtype summary)
+      </button>
+    </h2>
+    <div id="collapseTypes" class="accordion-collapse collapse" aria-labelledby="headingTypes" data-bs-parent="#profileAccordion">
+      <div class="accordion-body">
+
+        <div class="row g-2 mb-2">
+          <div class="col-md-6">
+            <input id="dtypeSearch" class="form-control form-control-sm" placeholder="Search column...">
+          </div>
+          <div class="col-md-6 small text-muted d-flex align-items-center">
+            Helps understand schema and data compatibility.
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-body p-0">
+            <table class="table table-sm table-striped mb-0" id="dtypeTable">
+              <thead>
+                <tr>
+                  <th>Column</th>
+                  <th>Type</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for col, dt in dtypes.items() %}
+                <tr>
+                  <td>{{ col }}</td>
+                  <td><code>{{ dt }}</code></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Histogram -->
+  <div class="accordion-item">
+    <h2 class="accordion-header" id="headingHist">
+      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseHist" aria-expanded="false" aria-controls="collapseHist">
+        Distribution (Histogram)
+      </button>
+    </h2>
+    <div id="collapseHist" class="accordion-collapse collapse" aria-labelledby="headingHist" data-bs-parent="#profileAccordion">
+      <div class="accordion-body">
+
+        <form method="get" class="row g-2 mb-2">
+          <div class="col-md-6">
+            <select class="form-select form-select-sm" name="col">
+              {% for c in all_columns %}
+                <option value="{{ c }}" {% if profile_col == c %}selected{% endif %}>{{ c }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <button class="btn btn-primary btn-sm" type="submit">View</button>
+          </div>
+          <div class="col-md-4 small text-muted d-flex align-items-center">
+            Select a numeric column to view its distribution.
+          </div>
+        </form>
+
+        <div class="card">
+          <div class="card-body">
+            <div id="histDiv"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function () {
+
+  function bindSearch(inputId, tableId) {
+    const input = document.getElementById(inputId);
+    const table = document.getElementById(tableId);
+    if (!input || !table) return;
+
+    input.addEventListener("input", function () {
+      const q = input.value.toLowerCase();
+      const rows = table.querySelectorAll("tbody tr");
+      rows.forEach(tr => {
+        const text = tr.innerText.toLowerCase();
+        tr.style.display = text.includes(q) ? "" : "none";
+      });
+    });
+  }
+
+  bindSearch("missingSearch", "missingTable");
+  bindSearch("outlierSearch", "outlierTable");
+  bindSearch("dtypeSearch", "dtypeTable");
+
+  // Plotly histogram 
+  const target = document.getElementById("histDiv");
+
+  {% if hist_json %}
+    const fig = JSON.parse({{ hist_json | tojson }});
+    Plotly.newPlot("histDiv", fig.data, fig.layout, {responsive: true});
+  {% else %}
+    if (target) target.innerHTML = "<div class='alert alert-warning mb-0'>No numeric column available.</div>";
+  {% endif %}
+
+})();
 </script>
 
 {% endblock %}
