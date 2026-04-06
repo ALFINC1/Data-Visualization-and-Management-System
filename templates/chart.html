@@ -1,78 +1,169 @@
 {% extends "base.html" %}
 {% block content %}
 
-<h5 class="mb-3 fw-semibold text-secondary">{{ title }}</h5>
+{% set qs = request.query_string.decode('utf-8') %}
+{% set q = ('?' ~ qs) if qs else '' %}
+
+<div class="d-flex flex-wrap align-items-center justify-content-between mb-2">
+  <div>
+    <div class="small text-muted">
+      <i class="bi bi-house-door"></i>
+      <a class="text-decoration-none" href="/{{ q }}">Dashboard</a>
+      <span class="mx-1">/</span>
+      <span>{{ title }}</span>
+    </div>
+    <h5 class="mb-0 fw-semibold text-secondary">{{ title }}</h5>
+  </div>
+
+  <div class="d-flex gap-2 flex-wrap mt-2 mt-md-0">
+    <a class="btn btn-outline-secondary btn-sm" href="/data{{ q }}">
+      <i class="bi bi-table"></i> Open Data
+    </a>
+
+    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="copyShareLink()">
+      <i class="bi bi-link-45deg"></i> Copy Link
+    </button>
+
+    {% if download_url is defined and download_url %}
+      <a class="btn btn-outline-primary btn-sm"
+         href="{{ download_url }}"
+         download="{{ download_name|default('chart.png') }}">
+        <i class="bi bi-download"></i> Download PNG
+      </a>
+    {% endif %}
+
+    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="refreshChart()">
+      <i class="bi bi-arrow-clockwise"></i> Refresh
+    </button>
+
+    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="toggleFullscreen()">
+      <i class="bi bi-arrows-fullscreen"></i> Fullscreen
+    </button>
+  </div>
+</div>
+
+<div class="d-flex flex-wrap gap-2 mb-3">
+  {% if request.args.get('category') %}
+    <span class="badge text-bg-light border">
+      <i class="bi bi-tag"></i> Category: {{ request.args.get('category') }}
+    </span>
+  {% endif %}
+  {% if request.args.get('date') %}
+    <span class="badge text-bg-light border">
+      <i class="bi bi-calendar3"></i> Date: {{ request.args.get('date') }}
+    </span>
+  {% endif %}
+  {% if request.args.get('min') %}
+    <span class="badge text-bg-light border">
+      <i class="bi bi-arrow-down"></i> Min: {{ request.args.get('min') }}
+    </span>
+  {% endif %}
+  {% if request.args.get('max') %}
+    <span class="badge text-bg-light border">
+      <i class="bi bi-arrow-up"></i> Max: {{ request.args.get('max') }}
+    </span>
+  {% endif %}
+  {% if request.args.get('search') %}
+    <span class="badge text-bg-light border">
+      <i class="bi bi-search"></i> Search: {{ request.args.get('search') }}
+    </span>
+  {% endif %}
+  {% if request.args.get('sort') %}
+    <span class="badge text-bg-light border">
+      <i class="bi bi-sort-down"></i> Sort: {{ request.args.get('sort') }} ({{ request.args.get('order','asc') }})
+    </span>
+  {% endif %}
+
+  {% if not request.args %}
+    <span class="badge text-bg-light border">
+      <i class="bi bi-funnel"></i> No filters applied
+    </span>
+  {% endif %}
+</div>
 
 {% if error %}
   <div class="alert alert-danger">{{ error }}</div>
 {% else %}
 
-  {# -------- Mode 1: PNG (old/original) -------- #}
-  {% if chart_url %}
-    <div class="card mb-3">
-      <div class="card-body text-center">
-        <img src="{{ chart_url }}" class="img-fluid" alt="Chart">
-      </div>
-    </div>
+  <!-- Main chart card -->
+  <div class="card mb-3" id="chartCard">
+    <div class="card-body">
 
-    <div class="d-flex gap-2 flex-wrap mb-3">
-      {% if download_url is defined and download_url %}
-        <a class="btn btn-outline-primary btn-sm"
-           href="{{ download_url }}"
-           download="{{ download_name|default('chart.png') }}">
-          <i class="bi bi-download"></i> Download PNG
-        </a>
+      {% if chart_url %}
+        <div class="text-center">
+          <img src="{{ chart_url }}" class="img-fluid" alt="Chart">
+        </div>
+
+      {% elif chart_type is defined and chart_type %}
+        <div id="chartLoading" class="text-center py-5">
+          <div class="spinner-border text-primary" role="status" aria-label="Loading"></div>
+          <div class="small text-muted mt-2">Loading interactive chart…</div>
+        </div>
+
+        <div id="chartDiv" style="min-height:460px; display:none;"></div>
+
+        <script>
+          async function loadPlotlyChart() {
+            const loading = document.getElementById("chartLoading");
+            const el = document.getElementById("chartDiv");
+            if (!el) return;
+
+            try {
+              const res = await fetch(`/api/chart/{{ chart_type }}` + window.location.search);
+              const obj = await res.json();
+
+              if (obj.error) {
+                loading.style.display = "none";
+                el.style.display = "block";
+                el.innerHTML = `<div class="alert alert-warning mb-0">${obj.error}</div>`;
+                return;
+              }
+
+              loading.style.display = "none";
+              el.style.display = "block";
+
+              Plotly.newPlot("chartDiv", obj.data, obj.layout, {responsive:true});
+
+              el.on('plotly_click', function(data){
+                if(!data.points || !data.points.length) return;
+                const x = data.points[0].x;
+                if(!x) return;
+                const url = new URL(window.location.origin + "/drill");
+                url.searchParams.set("to","data");
+                url.searchParams.set("category", x);
+                window.location.href = url.toString();
+              });
+
+            } catch (e) {
+              loading.style.display = "none";
+              el.style.display = "block";
+              el.innerHTML = `<div class="alert alert-danger mb-0">
+                Failed to load chart. Check server/API route.
+              </div>`;
+            }
+          }
+
+          loadPlotlyChart();
+
+          function refreshChart(){
+            const el = document.getElementById("chartDiv");
+            const loading = document.getElementById("chartLoading");
+            if (el && loading) {
+              el.style.display = "none";
+              loading.style.display = "block";
+              loadPlotlyChart();
+            } else {
+              window.location.reload();
+            }
+          }
+        </script>
+
+      {% else %}
+        <div class="alert alert-warning mb-0">Chart not available.</div>
       {% endif %}
 
-      <button class="btn btn-outline-secondary btn-sm" type="button" onclick="copyShareLink()">
-        <i class="bi bi-link-45deg"></i> Copy Link
-      </button>
     </div>
-
-  {# -------- Mode 2: Plotly interactive (new/advanced) -------- #}
-  {% elif chart_type is defined and chart_type %}
-    <div class="card mb-3">
-      <div class="card-body">
-        <div id="chartDiv" style="min-height:460px;"></div>
-      </div>
-    </div>
-
-    <div class="d-flex gap-2 flex-wrap mb-3">
-      <button class="btn btn-outline-secondary btn-sm" type="button" onclick="copyShareLink()">
-        <i class="bi bi-link-45deg"></i> Copy Link
-      </button>
-    </div>
-
-    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
-    <script>
-      (async function(){
-        const res = await fetch(`/api/chart/{{ chart_type }}` + window.location.search);
-        const obj = await res.json();
-        const el = document.getElementById("chartDiv");
-
-        if(obj.error){
-          el.innerHTML = `<div class="alert alert-warning mb-0">${obj.error}</div>`;
-          return;
-        }
-
-        Plotly.newPlot("chartDiv", obj.data, obj.layout, {responsive:true});
-
-        // click-to-drilldown
-        el.on('plotly_click', function(data){
-          if(!data.points || !data.points.length) return;
-          const x = data.points[0].x;
-          if(!x) return;
-          const url = new URL(window.location.origin + "/drill");
-          url.searchParams.set("to","data");
-          url.searchParams.set("category", x);
-          window.location.href = url.toString();
-        });
-      })();
-    </script>
-
-  {% else %}
-    <div class="alert alert-warning">Chart not available.</div>
-  {% endif %}
+  </div>
 
   {% if top_categories is defined and top_categories %}
     <div class="card bg-light mb-3">
@@ -111,4 +202,31 @@
   {% endif %}
 
 {% endif %}
+
+<script>
+function refreshChart(){
+  if (typeof loadPlotlyChart === "function") {
+    return;
+  }
+  window.location.reload();
+}
+
+function toggleFullscreen(){
+  const card = document.getElementById("chartCard");
+  if (!card) return;
+
+  if (!document.fullscreenElement) {
+    card.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen().catch(() => {});
+  }
+}
+
+document.addEventListener("keydown", function(e){
+  if (e.key.toLowerCase() === "f") {
+    toggleFullscreen();
+  }
+});
+</script>
+
 {% endblock %}

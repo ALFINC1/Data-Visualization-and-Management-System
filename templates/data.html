@@ -1,17 +1,88 @@
 {% extends "base.html" %}
 {% block content %}
 
-<h5 class="mb-3 text-secondary">Data Table</h5>
+<h5 class="mb-2 text-secondary">Data Table</h5>
+
+{# ---- page stats ---- #}
+{% set max_pages = ((total - 1) // per_page) + 1 if total and per_page else 1 %}
+{% set start_row = ((page - 1) * per_page) + 1 if total > 0 else 0 %}
+{% set end_row = (page * per_page) if (page * per_page) < total else total %}
+
+{# ---- query string without page ---- #}
+{% set ns = namespace(qs='') %}
+{% for k, v in request.args.items() %}
+  {% if k != 'page' %}
+    {% if ns.qs %}{% set ns.qs = ns.qs ~ '&' %}{% endif %}
+    {% set ns.qs = ns.qs ~ (k|urlencode) ~ '=' ~ (v|urlencode) %}
+  {% endif %}
+{% endfor %}
+
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+      <div class="small text-muted">
+        Showing <b>{{ start_row }}</b>–<b>{{ end_row }}</b> of <b>{{ total }}</b> rows ·
+        Page <b>{{ page }}</b> / <b>{{ max_pages }}</b>
+      </div>
+
+      <div class="d-flex gap-2 flex-wrap">
+        {% if export_url is defined and export_url %}
+          <a class="btn btn-outline-primary btn-sm" href="{{ export_url }}">
+            <i class="bi bi-download"></i> Export CSV
+          </a>
+        {% endif %}
+
+        <button class="btn btn-outline-secondary btn-sm" type="button" onclick="copyShareLink()">
+          <i class="bi bi-link-45deg"></i> Copy Link
+        </button>
+
+        <button class="btn btn-outline-secondary btn-sm" type="button" onclick="downloadCurrentPageCSV()">
+          <i class="bi bi-file-earmark-spreadsheet"></i> Download Page CSV
+        </button>
+
+        <button class="btn btn-outline-secondary btn-sm" type="button" onclick="window.print()">
+          <i class="bi bi-printer"></i> Print
+        </button>
+      </div>
+    </div>
+
+    <div class="mt-2 d-flex flex-wrap gap-2">
+      {% if request.args.get('category') %}
+        <span class="badge text-bg-light border"><i class="bi bi-tag"></i> {{ request.args.get('category') }}</span>
+      {% endif %}
+      {% if request.args.get('date') %}
+        <span class="badge text-bg-light border"><i class="bi bi-calendar3"></i> {{ request.args.get('date') }}</span>
+      {% endif %}
+      {% if request.args.get('min') %}
+        <span class="badge text-bg-light border"><i class="bi bi-arrow-down"></i> min={{ request.args.get('min') }}</span>
+      {% endif %}
+      {% if request.args.get('max') %}
+        <span class="badge text-bg-light border"><i class="bi bi-arrow-up"></i> max={{ request.args.get('max') }}</span>
+      {% endif %}
+      {% if request.args.get('search') %}
+        <span class="badge text-bg-light border"><i class="bi bi-search"></i> {{ request.args.get('search') }}</span>
+      {% endif %}
+      {% if request.args.get('sort') %}
+        <span class="badge text-bg-light border"><i class="bi bi-sort-down"></i> {{ request.args.get('sort') }} ({{ request.args.get('order','asc') }})</span>
+      {% endif %}
+      {% if not request.args %}
+        <span class="badge text-bg-light border"><i class="bi bi-funnel"></i> No filters</span>
+      {% endif %}
+    </div>
+  </div>
+</div>
 
 <div class="card mb-3">
   <div class="card-body">
     <form method="get" action="{{ request.path }}" class="row g-2 align-items-end">
 
+      <!-- keep filters -->
       <input type="hidden" name="category" value="{{ request.args.get('category','') }}">
       <input type="hidden" name="date" value="{{ request.args.get('date','') }}">
       <input type="hidden" name="min" value="{{ request.args.get('min','') }}">
       <input type="hidden" name="max" value="{{ request.args.get('max','') }}">
 
+      <!-- reset page -->
       <input type="hidden" name="page" value="1">
 
       <div class="col-md-4">
@@ -41,62 +112,68 @@
       </div>
 
       <div class="col-md-2 d-grid gap-2">
-        <button class="btn btn-primary btn-sm" type="submit">Apply</button>
-
-        {% if export_url is defined and export_url %}
-          <a class="btn btn-outline-primary btn-sm" href="{{ export_url }}">
-            <i class="bi bi-download"></i> Export CSV
-          </a>
-        {% endif %}
+        <button class="btn btn-primary btn-sm" type="submit">
+          <i class="bi bi-check2-circle"></i> Apply
+        </button>
+        <a class="btn btn-outline-secondary btn-sm" href="{{ request.path }}">
+          <i class="bi bi-eraser"></i> Clear
+        </a>
       </div>
 
     </form>
+
+    <div class="mt-3 d-flex align-items-center gap-2">
+      <div class="small text-muted">Go to page:</div>
+      <input id="gotoPage" type="number" min="1" class="form-control form-control-sm" style="max-width:120px;" placeholder="e.g. 2">
+      <button class="btn btn-outline-secondary btn-sm" type="button" onclick="goToPage()">
+        <i class="bi bi-arrow-right-circle"></i> Go
+      </button>
+      <div class="small text-muted">Max: {{ max_pages }}</div>
+    </div>
   </div>
 </div>
 
-<table class="table table-bordered table-sm align-middle dvms-table">
-  <thead class="dvms-table-head">
-    <tr>
-      {% for c in columns %}
-        <th>{{ c }}</th>
-      {% endfor %}
-    </tr>
-  </thead>
-  <tbody>
-    {% for r in rows %}
+<div class="table-responsive dvms-scroll">
+  <table class="table table-bordered table-sm align-middle dvms-table" id="dvmsTable">
+    <thead class="dvms-table-head sticky-top">
       <tr>
+        <th style="width:60px;">#</th>
+        {% for c in columns %}
+          <th>{{ c }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td class="text-center text-muted">{{ start_row + loop.index0 }}</td>
         {% for v in r %}
           <td>{{ v }}</td>
         {% endfor %}
       </tr>
-    {% endfor %}
-  </tbody>
-</table>
-
-{# Build query string without 'page' so pagination preserves filters/search/sort #}
-{% set ns = namespace(qs='') %}
-{% for k, v in request.args.items() %}
-  {% if k != 'page' %}
-    {% if ns.qs %}{% set ns.qs = ns.qs ~ '&' %}{% endif %}
-    {% set ns.qs = ns.qs ~ (k|urlencode) ~ '=' ~ (v|urlencode) %}
-  {% endif %}
-{% endfor %}
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
 
 <nav class="mt-3 d-flex align-items-center gap-2">
   <a class="btn btn-outline-primary btn-sm"
      href="{{ request.path }}?{% if ns.qs %}{{ ns.qs }}&{% endif %}page={{ page-1 if page>1 else 1 }}">
-    Prev
+    <i class="bi bi-chevron-left"></i> Prev
   </a>
 
-  <span class="mx-2 text-muted small">Page {{ page }}</span>
+  <span class="mx-2 text-muted small">
+    Page <b>{{ page }}</b> of <b>{{ max_pages }}</b>
+  </span>
 
   <a class="btn btn-outline-primary btn-sm"
      href="{{ request.path }}?{% if ns.qs %}{{ ns.qs }}&{% endif %}page={{ page+1 if page*per_page < total else page }}">
-    Next
+    Next <i class="bi bi-chevron-right"></i>
   </a>
 </nav>
 
 <style>
+.dvms-scroll { max-height: 70vh; }
 .dvms-table { border: 2px solid #3f6ad8; }
 .dvms-table th, .dvms-table td { border: 1px solid #3f6ad8; }
 .dvms-table-head th {
@@ -105,8 +182,51 @@
   font-weight: 600;
   font-size: 13px;
   text-align: center;
+  white-space: nowrap;
 }
 .dvms-table tbody tr:hover { background-color: rgba(63,106,216,0.08); }
 </style>
+
+<script>
+function goToPage(){
+  const input = document.getElementById("gotoPage");
+  if(!input) return;
+  const p = parseInt(input.value || "1", 10);
+  if(!p || p < 1) return;
+  const base = "{{ request.path }}";
+  const qs = "{% if ns.qs %}{{ ns.qs }}&{% endif %}";
+  window.location.href = base + "?" + qs + "page=" + p;
+}
+
+function downloadCurrentPageCSV(){
+  const table = document.getElementById("dvmsTable");
+  if(!table) return;
+
+  let csv = [];
+  const rows = table.querySelectorAll("tr");
+
+  rows.forEach(row => {
+    const cols = row.querySelectorAll("th,td");
+    const line = [];
+    cols.forEach(col => {
+      const text = (col.innerText || "").replaceAll('"', '""');
+      line.push('"' + text + '"');
+    });
+    csv.push(line.join(","));
+  });
+
+  const blob = new Blob([csv.join("\n")], {type: "text/csv;charset=utf-8;"});
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "dvms_page_export.csv";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  URL.revokeObjectURL(url);
+}
+</script>
 
 {% endblock %}
