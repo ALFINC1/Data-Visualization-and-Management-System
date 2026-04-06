@@ -7,6 +7,7 @@
   <div class="alert alert-danger">{{ error }}</div>
 {% else %}
 
+  {# -------- Mode 1: PNG (old/original) -------- #}
   {% if chart_url %}
     <div class="card mb-3">
       <div class="card-body text-center">
@@ -27,6 +28,47 @@
         <i class="bi bi-link-45deg"></i> Copy Link
       </button>
     </div>
+
+  {# -------- Mode 2: Plotly interactive (new/advanced) -------- #}
+  {% elif chart_type is defined and chart_type %}
+    <div class="card mb-3">
+      <div class="card-body">
+        <div id="chartDiv" style="min-height:460px;"></div>
+      </div>
+    </div>
+
+    <div class="d-flex gap-2 flex-wrap mb-3">
+      <button class="btn btn-outline-secondary btn-sm" type="button" onclick="copyShareLink()">
+        <i class="bi bi-link-45deg"></i> Copy Link
+      </button>
+    </div>
+
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script>
+      (async function(){
+        const res = await fetch(`/api/chart/{{ chart_type }}` + window.location.search);
+        const obj = await res.json();
+        const el = document.getElementById("chartDiv");
+
+        if(obj.error){
+          el.innerHTML = `<div class="alert alert-warning mb-0">${obj.error}</div>`;
+          return;
+        }
+
+        Plotly.newPlot("chartDiv", obj.data, obj.layout, {responsive:true});
+
+        // click-to-drilldown
+        el.on('plotly_click', function(data){
+          if(!data.points || !data.points.length) return;
+          const x = data.points[0].x;
+          if(!x) return;
+          const url = new URL(window.location.origin + "/drill");
+          url.searchParams.set("to","data");
+          url.searchParams.set("category", x);
+          window.location.href = url.toString();
+        });
+      })();
+    </script>
 
   {% else %}
     <div class="alert alert-warning">Chart not available.</div>

@@ -8,9 +8,10 @@ import numpy as np
 import pandas as pd
 
 import matplotlib
-matplotlib.use("Agg")  # kept for compatibility; interactive charts use Plotly
-import matplotlib.pyplot as plt  # (not required, but harmless)
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
+import seaborn as sns
 import plotly.express as px
 
 from flask import (
@@ -22,14 +23,16 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 from service.service import DataService
 
-# ---------------- APP ----------------
+
+# APP
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "dvms-dev-secret")
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-# ---------------- CONFIG ----------------
+
+# CONFIG 
 DATA_PATH_DEFAULT = os.getenv("DATA_PATH", "data.xlsx")
 
 UPLOAD_DIR = "uploads"
@@ -37,25 +40,30 @@ STORAGE_DIR = "storage"
 STATIC_DIR = "static"
 
 DB_PATH = os.path.join(STORAGE_DIR, "dvms.sqlite")
-DATA_TABLE = "dvms_data"   # active dataset table (replaced on upload)
-META_TABLE = "dvms_meta"   # stores active dataset info (safe at startup)
+DATA_TABLE = "dvms_data"  
+META_TABLE = "dvms_meta" 
 
 ALLOWED_EXTENSIONS = {".csv", ".xls", ".xlsx"}
 
-# Default admin (override with environment variables)
-ADMIN_USER = os.getenv("ADMIN_USER", "admin")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")  # change in env for production
+ROTATION = 40
+FONT_SIZE = 7
 
-# ---------------- DIR / DB ----------------
+ADMIN_USER = os.getenv("ADMIN_USER", "admin")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123") 
+
+
+# DIR / DB 
 def init_dirs():
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     os.makedirs(STORAGE_DIR, exist_ok=True)
     os.makedirs(STATIC_DIR, exist_ok=True)
 
+
 def db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
 
 def table_exists(name: str) -> bool:
     conn = db()
@@ -67,6 +75,7 @@ def table_exists(name: str) -> bool:
         return cur.fetchone() is not None
     finally:
         conn.close()
+
 
 def init_db():
     init_dirs()
@@ -106,11 +115,11 @@ def init_db():
             )
             conn.commit()
             logger.info("Admin account created (change ADMIN_PASSWORD env for security).")
-
     finally:
         conn.close()
 
-# ---------------- META (no session required) ----------------
+
+# META 
 def meta_get(key: str, default=None):
     conn = db()
     try:
@@ -118,6 +127,7 @@ def meta_get(key: str, default=None):
         return row["v"] if row else default
     finally:
         conn.close()
+
 
 def meta_set(key: str, value: str):
     conn = db()
@@ -131,36 +141,33 @@ def meta_set(key: str, value: str):
     finally:
         conn.close()
 
-# ---------------- AUTH HELPERS ----------------
+
+# AUTH HELPERS
 def current_user():
     return session.get("user") if has_request_context() else None
+
 
 def current_role():
     return session.get("role", "viewer") if has_request_context() else "viewer"
 
+
 def login_required():
     return current_user() is not None
+
 
 def admin_required():
     return (current_user() is not None) and (current_role() == "admin")
 
-# ---------------- DATASET HELPERS ----------------
+
+# DATASET HELPERS
 def active_data_path():
-    """
-    ✅ FIX: safe outside request context.
-    - During a request: use session (per-user selection)
-    - Outside a request: use META_TABLE stored value
-    - Fallback: default DATA_PATH_DEFAULT
-    """
+
     if has_request_context():
         return session.get("DATA_PATH_ACTIVE", meta_get("active_dataset_path", DATA_PATH_DEFAULT))
     return meta_get("active_dataset_path", DATA_PATH_DEFAULT)
 
+
 def import_to_sqlite(path: str):
-    """
-    Loads Excel/CSV into pandas and writes to SQLite as dvms_data (replace).
-    Also updates meta table so startup never needs session.
-    """
     ds = DataService(path)
     df = ds.load_df().copy()
     df.columns = [str(c).strip().replace(" ", "_") for c in df.columns]
@@ -175,14 +182,12 @@ def import_to_sqlite(path: str):
     meta_set("active_dataset_path", path)
     meta_set("imported_at", str(int(time.time())))
 
+
 def ensure_dataset_imported():
-    """
-    ✅ FIX: never touches session.
-    Ensures DB table exists; imports DEFAULT dataset if missing.
-    """
     init_db()
     if not table_exists(DATA_TABLE):
         import_to_sqlite(DATA_PATH_DEFAULT)
+
 
 def get_columns():
     conn = db()
@@ -192,12 +197,15 @@ def get_columns():
     finally:
         conn.close()
 
-def sample_df(limit=5000):
+
+def sample_df(limit=5000, where_clause="", params=None):
     conn = db()
     try:
-        return pd.read_sql_query(f"SELECT * FROM {DATA_TABLE} LIMIT {int(limit)}", conn)
+        q = f"SELECT * FROM {DATA_TABLE}{where_clause} LIMIT {int(limit)}"
+        return pd.read_sql_query(q, conn, params=params or [])
     finally:
         conn.close()
+
 
 def pick_columns():
     cols = get_columns()
@@ -208,6 +216,7 @@ def pick_columns():
     y = num[0] if num else None
     return x, y
 
+
 def detect_date_column():
     cols = get_columns()
     for c in cols:
@@ -216,12 +225,14 @@ def detect_date_column():
             return c
     return None
 
-# ---------------- FILTER / SEARCH / SORT ----------------
+
+# FILTER / SEARCH / SORT
 def safe_float(s):
     try:
         return float(s)
     except:
         return None
+
 
 def build_where(x_col, y_col, date_col, scatter_cols=None):
     where = []
@@ -241,6 +252,7 @@ def build_where(x_col, y_col, date_col, scatter_cols=None):
         where.append(f"CAST({date_col} AS TEXT) = ?")
         params.append(date_val)
 
+    # numeric range
     if scatter_cols and len(scatter_cols) >= 2:
         a, b = scatter_cols[0], scatter_cols[1]
         if mn is not None:
@@ -258,6 +270,7 @@ def build_where(x_col, y_col, date_col, scatter_cols=None):
                 where.append(f"{y_col} <= ?")
                 params.append(mx)
 
+    # search across all columns
     if search:
         cols = get_columns()
         parts = []
@@ -268,6 +281,7 @@ def build_where(x_col, y_col, date_col, scatter_cols=None):
 
     clause = (" WHERE " + " AND ".join(where)) if where else ""
     return clause, params
+
 
 def build_filter_options(x_col, date_col):
     conn = db()
@@ -296,7 +310,103 @@ def build_filter_options(x_col, date_col):
     finally:
         conn.close()
 
-# ---------------- CONTEXT ----------------
+
+def compute_kpis(where_clause, params, x_col, y_col):
+    cols = get_columns()
+
+    conn = db()
+    try:
+        total_rows = int(pd.read_sql_query(
+            f"SELECT COUNT(*) AS c FROM {DATA_TABLE}{where_clause}",
+            conn, params=params
+        ).loc[0, "c"])
+
+        distinct = 0
+        if x_col:
+            distinct = int(pd.read_sql_query(
+                f"SELECT COUNT(DISTINCT CAST({x_col} AS TEXT)) AS d FROM {DATA_TABLE}{where_clause}",
+                conn, params=params
+            ).loc[0, "d"])
+
+        y_min = y_mean = y_max = None
+        if y_col:
+            stats = pd.read_sql_query(
+                f"SELECT MIN({y_col}) AS mn, AVG({y_col}) AS av, MAX({y_col}) AS mx FROM {DATA_TABLE}{where_clause}",
+                conn, params=params
+            )
+            y_min = stats.loc[0, "mn"]
+            y_mean = stats.loc[0, "av"]
+            y_max = stats.loc[0, "mx"]
+
+        # estimate numeric cols from sample
+        df_sample = pd.read_sql_query(f"SELECT * FROM {DATA_TABLE} LIMIT 300", conn)
+        numeric_cols = len(df_sample.select_dtypes(include="number").columns)
+
+    finally:
+        conn.close()
+
+    return {
+        "rows": total_rows,
+        "cols": len(cols),
+        "numeric_cols": numeric_cols,
+        "distinct_categories": distinct,
+        "y_min": y_min,
+        "y_mean": y_mean,
+        "y_max": y_max,
+    }
+
+
+# FIXED HEATMAP PNG 
+def save_heatmap_png(df_any, out_path, title="Correlation Heatmap", small=True):
+    plt.close("all")
+
+    num_df = df_any.select_dtypes(include="number").dropna(axis=1, how="all")
+
+    if not num_df.empty:
+        nunique = num_df.nunique(dropna=True)
+        num_df = num_df.loc[:, nunique > 1]
+
+    if num_df.shape[1] < 2:
+        plt.figure(figsize=(4, 3) if small else (10, 8))
+        plt.axis("off")
+        plt.text(
+            0.5, 0.5,
+            "Not enough numeric columns\nfor correlation heatmap",
+            ha="center", va="center", fontsize=10
+        )
+        plt.tight_layout()
+        plt.savefig(out_path, dpi=140, bbox_inches="tight")
+        plt.close()
+        return
+
+    corr = num_df.corr()
+    if corr.isna().all().all():
+        plt.figure(figsize=(4, 3) if small else (10, 8))
+        plt.axis("off")
+        plt.text(
+            0.5, 0.5,
+            "Correlation could not be computed\n(check numeric data)",
+            ha="center", va="center", fontsize=10
+        )
+        plt.tight_layout()
+        plt.savefig(out_path, dpi=140, bbox_inches="tight")
+        plt.close()
+        return
+
+    plt.figure(figsize=(4.8, 3.2) if small else (10, 8))
+    ax = sns.heatmap(
+        corr, cmap="coolwarm", annot=False,
+        square=True, linewidths=0.5, cbar=False
+    )
+    ax.set_title(title, fontsize=10)
+    plt.xticks(rotation=ROTATION, ha="right", fontsize=FONT_SIZE)
+    plt.yticks(fontsize=FONT_SIZE)
+    plt.tight_layout(pad=0.3)
+    plt.savefig(out_path, dpi=140, bbox_inches="tight")
+    plt.close()
+
+
+# CONTEXT
 def base_context():
     x_col, y_col = pick_columns()
     date_col = detect_date_column()
@@ -328,10 +438,13 @@ def base_context():
         export_url=url_for("export_csv", **request.args.to_dict(flat=True))
     )
 
-# ---------------- AUTH ROUTES ----------------
+
+# AUTH ROUTES 
 @app.route("/login", methods=["GET", "POST"])
 def login():
     init_db()
+    ensure_dataset_imported()
+
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "").strip()
@@ -351,8 +464,8 @@ def login():
         flash(f"Welcome {user['username']}!", "success")
         return redirect(url_for("index"))
 
-    # allow login page even if not logged in
     return render_template("login.html", **base_context(), title="Login")
+
 
 @app.route("/logout")
 def logout():
@@ -360,7 +473,8 @@ def logout():
     flash("Logged out.", "info")
     return redirect(url_for("login"))
 
-# ---------------- UPLOAD (ADMIN) ----------------
+
+# UPLOAD (ADMIN)
 @app.route("/upload", methods=["POST"])
 def upload_dataset():
     if not admin_required():
@@ -390,6 +504,7 @@ def upload_dataset():
     flash("Dataset uploaded + imported into SQLite.", "success")
     return redirect(url_for("index"))
 
+
 @app.route("/dataset/reset")
 def reset_dataset():
     if not admin_required():
@@ -401,14 +516,14 @@ def reset_dataset():
     flash("Dataset reset to default and re-imported.", "info")
     return redirect(url_for("index"))
 
-# ---------------- PRESETS ----------------
+
+# PRESETS
 @app.route("/presets/save", methods=["POST"])
 def preset_save():
     if not admin_required():
         flash("Admin only: save presets.", "danger")
         return redirect(url_for("index"))
 
-    init_db()
     name = request.form.get("name", "").strip()
     url = request.form.get("url", request.referrer or url_for("index", _external=True))
     if not name:
@@ -420,7 +535,7 @@ def preset_save():
     try:
         conn.execute(
             "INSERT INTO presets(id,name,url,created_at,owner) VALUES(?,?,?,?,?)",
-            (pid, name, url, int(time.time()), current_user())
+            (pid, name, url, int(time.time()), current_user() or ADMIN_USER)
         )
         conn.commit()
     finally:
@@ -429,9 +544,9 @@ def preset_save():
     flash("Preset saved.", "success")
     return redirect(url_for("index"))
 
+
 @app.route("/presets/apply/<preset_id>")
 def preset_apply(preset_id):
-    init_db()
     conn = db()
     try:
         p = conn.execute("SELECT * FROM presets WHERE id=?", (preset_id,)).fetchone()
@@ -441,6 +556,7 @@ def preset_apply(preset_id):
         flash("Preset not found.", "danger")
         return redirect(url_for("index"))
     return redirect(p["url"])
+
 
 @app.route("/presets/delete/<preset_id>")
 def preset_delete(preset_id):
@@ -458,14 +574,15 @@ def preset_delete(preset_id):
     flash("Preset deleted.", "info")
     return redirect(url_for("index"))
 
-# ---------------- EXPORT CSV ----------------
+
+# EXPORT CSV 
 @app.route("/export/data.csv")
 def export_csv():
     ensure_dataset_imported()
     x_col, y_col = pick_columns()
     date_col = detect_date_column()
 
-    clause, params = build_where(x_col, y_col, date_col)
+    where_clause, params = build_where(x_col, y_col, date_col)
 
     sort_col = request.args.get("sort", "").strip()
     order = request.args.get("order", "asc").strip().lower()
@@ -475,7 +592,7 @@ def export_csv():
     if sort_col and sort_col in cols:
         order_clause = f" ORDER BY {sort_col} {'DESC' if order == 'desc' else 'ASC'}"
 
-    q = f"SELECT * FROM {DATA_TABLE}{clause}{order_clause}"
+    q = f"SELECT * FROM {DATA_TABLE}{where_clause}{order_clause}"
     conn = db()
     try:
         df = pd.read_sql_query(q, conn, params=params)
@@ -487,7 +604,8 @@ def export_csv():
     return Response(csv_data, mimetype="text/csv",
                     headers={"Content-Disposition": f"attachment; filename={filename}"})
 
-# ---------------- EXPORT PDF REPORT ----------------
+
+# EXPORT PDF REPORT
 @app.route("/export/report.pdf")
 def export_report_pdf():
     ensure_dataset_imported()
@@ -513,14 +631,15 @@ def export_report_pdf():
     c.drawString(40, 725, f"Date: {f.get('date') or 'All'}")
     c.drawString(40, 710, f"Min: {f.get('min') or '-'}   Max: {f.get('max') or '-'}")
 
-    c.drawString(40, 680, "Open dashboard for interactive charts and drill-down.")
+    c.drawString(40, 680, "Open dashboard for charts and drill-down.")
     c.setFont("Helvetica", 9)
     c.drawString(40, 30, "© 2026 Fadil Ahmed — DNA Technology")
 
     c.save()
     return send_file(pdf_path, as_attachment=True, download_name=os.path.basename(pdf_path))
 
-# ---------------- DRILL DOWN ----------------
+
+# DRILL DOWN 
 @app.route("/drill")
 def drill():
     category = request.args.get("category", "").strip()
@@ -535,17 +654,22 @@ def drill():
         return redirect(url_for("index", **args))
     return redirect(url_for("data", **args))
 
-# ---------------- INTERACTIVE CHART API ----------------
+
+# INTERACTIVE CHART API
 @app.route("/api/chart/<chart_type>")
 def api_chart(chart_type):
     ensure_dataset_imported()
     x_col, y_col = pick_columns()
     date_col = detect_date_column()
 
+    where_clause, params = build_where(x_col, y_col, date_col)
+
     conn = db()
     try:
-        clause, params = build_where(x_col, y_col, date_col)
-        df = pd.read_sql_query(f"SELECT * FROM {DATA_TABLE}{clause} LIMIT 5000", conn, params=params)
+        df = pd.read_sql_query(
+            f"SELECT * FROM {DATA_TABLE}{where_clause} LIMIT 5000",
+            conn, params=params
+        )
     finally:
         conn.close()
 
@@ -555,30 +679,42 @@ def api_chart(chart_type):
     if chart_type == "bar":
         g = df.groupby(x_col)[y_col].mean().sort_values(ascending=False).head(10).reset_index()
         fig = px.bar(g, x=x_col, y=y_col, title="Bar Chart")
+
     elif chart_type == "line":
         g = df.groupby(x_col)[y_col].mean().sort_values(ascending=False).head(10).reset_index()
         fig = px.line(g, x=x_col, y=y_col, title="Line Chart")
+
     elif chart_type == "pie":
         g = df[x_col].astype(str).value_counts().head(10).reset_index()
         g.columns = [x_col, "count"]
         fig = px.pie(g, names=x_col, values="count", title="Pie Chart")
+
     elif chart_type == "scatter":
         nums = df.select_dtypes(include="number")
         if nums.shape[1] < 2:
             return Response(json.dumps({"error": "Not enough numeric cols"}), mimetype="application/json")
         fig = px.scatter(df, x=nums.columns[0], y=nums.columns[1], title="Scatter Plot")
+
     elif chart_type == "heatmap":
-        nums = df.select_dtypes(include="number")
+        nums = df.select_dtypes(include="number").dropna(axis=1, how="all")
         if nums.shape[1] < 2:
             return Response(json.dumps({"error": "Not enough numeric cols"}), mimetype="application/json")
+        nunique = nums.nunique(dropna=True)
+        nums = nums.loc[:, nunique > 1]
+        if nums.shape[1] < 2:
+            return Response(json.dumps({"error": "Numeric columns are constant; heatmap not possible"}), mimetype="application/json")
         corr = nums.corr()
+        if corr.isna().all().all():
+            return Response(json.dumps({"error": "Correlation could not be computed"}), mimetype="application/json")
         fig = px.imshow(corr, text_auto=False, title="Correlation Heatmap")
+
     else:
         return Response(json.dumps({"error": "Unknown chart type"}), mimetype="application/json")
 
     return Response(fig.to_json(), mimetype="application/json")
 
-# ---------------- DASHBOARD ----------------
+
+# DASHBOARD (PNG charts) 
 @app.route("/")
 def index():
     init_db()
@@ -587,10 +723,86 @@ def index():
     if not login_required():
         return redirect(url_for("login"))
 
+    x_col, y_col = pick_columns()
+    date_col = detect_date_column()
     ctx = base_context()
+
+    where_clause, params = build_where(x_col, y_col, date_col)
+    ctx["kpis"] = compute_kpis(where_clause, params, x_col, y_col)
+
+    # Get data subset for plotting
+    df_plot = sample_df(limit=8000, where_clause=where_clause, params=params)
+    if df_plot.empty or not x_col or not y_col:
+        ctx["error"] = "No data matches the selected filters."
+        return render_template("index.html", **ctx, title="Analytics Dashboard")
+
+    # top categories for drilldown
+    ctx["top_categories"] = (
+        df_plot[x_col].astype(str).value_counts().head(5).index.tolist()
+        if x_col in df_plot.columns else []
+    )
+
+    # Build grouped
+    grouped = df_plot.groupby(x_col)[y_col].mean().sort_values(ascending=False).head(5)
+
+    # BAR
+    bar_file = "dashboard_bar.png"
+    plt.figure(figsize=(4, 3))
+    plt.bar(grouped.index.astype(str), grouped.values, color="#3f6ad8")
+    plt.xticks(rotation=ROTATION, ha="right", fontsize=FONT_SIZE)
+    plt.tight_layout()
+    plt.savefig(os.path.join(STATIC_DIR, bar_file), dpi=130, bbox_inches="tight")
+    plt.close()
+
+    # LINE
+    line_file = "dashboard_line.png"
+    plt.figure(figsize=(4, 3))
+    plt.plot(grouped.index.astype(str), grouped.values, linewidth=2, color="#3f6ad8")
+    plt.xticks(rotation=ROTATION, ha="right", fontsize=FONT_SIZE)
+    plt.tight_layout()
+    plt.savefig(os.path.join(STATIC_DIR, line_file), dpi=130, bbox_inches="tight")
+    plt.close()
+
+    # PIE (top 5 counts)
+    pie_file = "dashboard_pie.png"
+    top = df_plot[x_col].astype(str).value_counts().head(5)
+    plt.figure(figsize=(4, 3))
+    plt.pie(top.values, labels=top.index.tolist(), autopct="%1.1f%%")
+    plt.tight_layout()
+    plt.savefig(os.path.join(STATIC_DIR, pie_file), dpi=130, bbox_inches="tight")
+    plt.close()
+
+    # SCATTER (first two numeric columns)
+    scatter_file = "dashboard_scatter.png"
+    nums = df_plot.select_dtypes(include="number")
+    plt.figure(figsize=(4, 3))
+    if nums.shape[1] >= 2:
+        plt.scatter(nums.iloc[:, 0], nums.iloc[:, 1], alpha=0.6, color="#00a8a8")
+        plt.xlabel(nums.columns[0], fontsize=FONT_SIZE)
+        plt.ylabel(nums.columns[1], fontsize=FONT_SIZE)
+        plt.tight_layout()
+    else:
+        plt.axis("off")
+        plt.text(0.5, 0.5, "Not enough numeric columns", ha="center", va="center")
+    plt.savefig(os.path.join(STATIC_DIR, scatter_file), dpi=130, bbox_inches="tight")
+    plt.close()
+
+    # HEATMAP (FIXED)
+    heatmap_file = "dashboard_heatmap.png"
+    save_heatmap_png(df_plot, os.path.join(STATIC_DIR, heatmap_file), title="Correlation Heatmap", small=True)
+
+    ctx.update(
+        bar_url=url_for("static", filename=bar_file) + f"?v={int(time.time())}",
+        line_url=url_for("static", filename=line_file) + f"?v={int(time.time())}",
+        pie_url=url_for("static", filename=pie_file) + f"?v={int(time.time())}",
+        scatter_url=url_for("static", filename=scatter_file) + f"?v={int(time.time())}",
+        heatmap_url=url_for("static", filename=heatmap_file) + f"?v={int(time.time())}",
+    )
+
     return render_template("index.html", **ctx, title="Analytics Dashboard")
 
-# ---------------- DATA TABLE ----------------
+
+# DATA TABLE
 @app.route("/data")
 def data():
     init_db()
@@ -603,7 +815,7 @@ def data():
     date_col = detect_date_column()
     ctx = base_context()
 
-    clause, params = build_where(x_col, y_col, date_col)
+    where_clause, params = build_where(x_col, y_col, date_col)
 
     sort_col = request.args.get("sort", "").strip()
     order = request.args.get("order", "asc").strip().lower()
@@ -619,9 +831,13 @@ def data():
 
     conn = db()
     try:
-        total = pd.read_sql_query(f"SELECT COUNT(*) AS c FROM {DATA_TABLE}{clause}", conn, params=params).loc[0, "c"]
+        total = int(pd.read_sql_query(
+            f"SELECT COUNT(*) AS c FROM {DATA_TABLE}{where_clause}",
+            conn, params=params
+        ).loc[0, "c"])
+
         df = pd.read_sql_query(
-            f"SELECT * FROM {DATA_TABLE}{clause}{order_clause} LIMIT ? OFFSET ?",
+            f"SELECT * FROM {DATA_TABLE}{where_clause}{order_clause} LIMIT ? OFFSET ?",
             conn, params=params + [per_page, offset]
         )
     finally:
@@ -631,12 +847,13 @@ def data():
         columns=cols,
         rows=df.values.tolist(),
         page=page,
-        total=int(total),
+        total=total,
         per_page=per_page
     )
     return render_template("data.html", **ctx, title="Data")
 
-# ---------------- PROFILE PAGE ----------------
+
+# PROFILE PAGE
 @app.route("/profile")
 def profile():
     init_db()
@@ -669,6 +886,7 @@ def profile():
         high = q3 + 1.5 * iqr
         outliers[c] = int(((s < low) | (s > high)).sum())
 
+    # histogram column
     col = request.args.get("col")
     if not col:
         num_cols = df.select_dtypes(include="number").columns.tolist()
@@ -690,36 +908,171 @@ def profile():
     )
     return render_template("profile.html", **ctx, title="Data Profile")
 
-# ---------------- DETAIL CHART PAGES ----------------
+
+# DETAIL CHART PAGES (PNG)
 @app.route("/bar")
 def bar_chart():
     if not login_required():
         return redirect(url_for("login"))
-    return render_template("chart.html", **base_context(), chart_type="bar", title="Bar Chart")
+
+    x_col, y_col = pick_columns()
+    date_col = detect_date_column()
+    ctx = base_context()
+
+    where_clause, params = build_where(x_col, y_col, date_col)
+    df_plot = sample_df(limit=10000, where_clause=where_clause, params=params)
+
+    if df_plot.empty or not x_col or not y_col:
+        ctx["error"] = "No data matches the selected filters."
+        return render_template("chart.html", **ctx, title="Bar Chart")
+
+    grouped = df_plot.groupby(x_col)[y_col].mean().sort_values(ascending=False).head(10)
+    out_file = "bar.png"
+
+    plt.figure(figsize=(10, 5))
+    plt.bar(grouped.index.astype(str), grouped.values, color="#3f6ad8")
+    plt.xlabel(x_col)
+    plt.ylabel(f"{y_col} (Mean)")
+    plt.xticks(rotation=ROTATION, ha="right")
+    plt.tight_layout()
+    plt.savefig(os.path.join(STATIC_DIR, out_file), dpi=140, bbox_inches="tight")
+    plt.close()
+
+    ctx.update(
+        chart_url=url_for("static", filename=out_file) + f"?v={int(time.time())}",
+        download_url=url_for("static", filename=out_file),
+        download_name=out_file,
+        top_categories=grouped.index.astype(str).tolist()
+    )
+    return render_template("chart.html", **ctx, title="Bar Chart")
+
 
 @app.route("/line")
 def line_chart():
     if not login_required():
         return redirect(url_for("login"))
-    return render_template("chart.html", **base_context(), chart_type="line", title="Line Chart")
+
+    x_col, y_col = pick_columns()
+    date_col = detect_date_column()
+    ctx = base_context()
+
+    where_clause, params = build_where(x_col, y_col, date_col)
+    df_plot = sample_df(limit=10000, where_clause=where_clause, params=params)
+
+    if df_plot.empty or not x_col or not y_col:
+        ctx["error"] = "No data matches the selected filters."
+        return render_template("chart.html", **ctx, title="Line Chart")
+
+    grouped = df_plot.groupby(x_col)[y_col].mean().sort_values(ascending=False).head(10)
+    out_file = "line.png"
+
+    plt.figure(figsize=(10, 5))
+    plt.plot(grouped.index.astype(str), grouped.values, linewidth=2, color="#3f6ad8")
+    plt.xlabel(x_col)
+    plt.ylabel(y_col)
+    plt.xticks(rotation=ROTATION, ha="right")
+    plt.tight_layout()
+    plt.savefig(os.path.join(STATIC_DIR, out_file), dpi=140, bbox_inches="tight")
+    plt.close()
+
+    ctx.update(
+        chart_url=url_for("static", filename=out_file) + f"?v={int(time.time())}",
+        download_url=url_for("static", filename=out_file),
+        download_name=out_file,
+    )
+    return render_template("chart.html", **ctx, title="Line Chart")
+
 
 @app.route("/scatter")
 def scatter_chart():
     if not login_required():
         return redirect(url_for("login"))
-    return render_template("chart.html", **base_context(), chart_type="scatter", title="Scatter Plot")
+
+    x_col, y_col = pick_columns()
+    date_col = detect_date_column()
+    ctx = base_context()
+
+    where_clause, params = build_where(x_col, y_col, date_col)
+    df_plot = sample_df(limit=8000, where_clause=where_clause, params=params)
+
+    nums = df_plot.select_dtypes(include="number")
+    out_file = "scatter.png"
+
+    plt.figure(figsize=(8, 6))
+    if nums.shape[1] >= 2:
+        plt.scatter(nums.iloc[:, 0], nums.iloc[:, 1], alpha=0.7, color="#00a8a8")
+        plt.xlabel(nums.columns[0])
+        plt.ylabel(nums.columns[1])
+    else:
+        plt.axis("off")
+        plt.text(0.5, 0.5, "Not enough numeric columns", ha="center", va="center")
+    plt.tight_layout()
+    plt.savefig(os.path.join(STATIC_DIR, out_file), dpi=140, bbox_inches="tight")
+    plt.close()
+
+    ctx.update(
+        chart_url=url_for("static", filename=out_file) + f"?v={int(time.time())}",
+        download_url=url_for("static", filename=out_file),
+        download_name=out_file,
+    )
+    return render_template("chart.html", **ctx, title="Scatter Plot")
+
 
 @app.route("/heatmap")
 def heatmap_chart():
     if not login_required():
         return redirect(url_for("login"))
-    return render_template("chart.html", **base_context(), chart_type="heatmap", title="Heatmap")
+
+    x_col, y_col = pick_columns()
+    date_col = detect_date_column()
+    ctx = base_context()
+
+    where_clause, params = build_where(x_col, y_col, date_col)
+    df_plot = sample_df(limit=10000, where_clause=where_clause, params=params)
+
+    out_file = "heatmap.png"
+    save_heatmap_png(df_plot, os.path.join(STATIC_DIR, out_file), title="Correlation Heatmap", small=False)
+
+    ctx.update(
+        chart_url=url_for("static", filename=out_file) + f"?v={int(time.time())}",
+        download_url=url_for("static", filename=out_file),
+        download_name=out_file
+    )
+    return render_template("chart.html", **ctx, title="Heatmap")
+
 
 @app.route("/pie")
 def pie_chart():
     if not login_required():
         return redirect(url_for("login"))
-    return render_template("chart.html", **base_context(), chart_type="pie", title="Pie Chart")
+
+    x_col, y_col = pick_columns()
+    date_col = detect_date_column()
+    ctx = base_context()
+
+    where_clause, params = build_where(x_col, y_col, date_col)
+    df_plot = sample_df(limit=10000, where_clause=where_clause, params=params)
+
+    if df_plot.empty or not x_col or x_col not in df_plot.columns:
+        ctx["error"] = "No data matches the selected filters."
+        return render_template("pie.html", **ctx, title="Pie Chart")
+
+    top = df_plot[x_col].astype(str).value_counts().head(10)
+    out_file = "pie.png"
+
+    plt.figure(figsize=(7, 7))
+    plt.pie(top.values, labels=top.index.tolist(), autopct="%1.1f%%")
+    plt.tight_layout()
+    plt.savefig(os.path.join(STATIC_DIR, out_file), dpi=140, bbox_inches="tight")
+    plt.close()
+
+    ctx.update(
+        pie_url=url_for("static", filename=out_file) + f"?v={int(time.time())}",
+        download_url=url_for("static", filename=out_file),
+        download_name=out_file
+    )
+    return render_template("pie.html", **ctx, title="Pie Chart")
+
 
 if __name__ == "__main__":
     init_db()

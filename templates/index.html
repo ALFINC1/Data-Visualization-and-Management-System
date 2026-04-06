@@ -10,62 +10,38 @@
 {% if kpis is defined and kpis %}
 <div class="row g-3 mb-3">
   <div class="col-md-2">
-    <div class="card">
-      <div class="card-body text-center">
-        <div class="small text-muted">Rows</div>
-        <div class="fw-bold">{{ kpis.rows }}</div>
-      </div>
-    </div>
+    <div class="card"><div class="card-body text-center">
+      <div class="small text-muted">Rows</div><div class="fw-bold">{{ kpis.rows }}</div>
+    </div></div>
   </div>
-
   <div class="col-md-2">
-    <div class="card">
-      <div class="card-body text-center">
-        <div class="small text-muted">Columns</div>
-        <div class="fw-bold">{{ kpis.cols }}</div>
-      </div>
-    </div>
+    <div class="card"><div class="card-body text-center">
+      <div class="small text-muted">Columns</div><div class="fw-bold">{{ kpis.cols }}</div>
+    </div></div>
   </div>
-
   <div class="col-md-2">
-    <div class="card">
-      <div class="card-body text-center">
-        <div class="small text-muted">Numeric</div>
-        <div class="fw-bold">{{ kpis.numeric_cols }}</div>
-      </div>
-    </div>
+    <div class="card"><div class="card-body text-center">
+      <div class="small text-muted">Numeric</div><div class="fw-bold">{{ kpis.numeric_cols }}</div>
+    </div></div>
   </div>
-
   <div class="col-md-2">
-    <div class="card">
-      <div class="card-body text-center">
-        <div class="small text-muted">Distinct</div>
-        <div class="fw-bold">{{ kpis.distinct_categories }}</div>
-      </div>
-    </div>
+    <div class="card"><div class="card-body text-center">
+      <div class="small text-muted">Distinct</div><div class="fw-bold">{{ kpis.distinct_categories }}</div>
+    </div></div>
   </div>
-
   <div class="col-md-2">
-    <div class="card">
-      <div class="card-body text-center">
-        <div class="small text-muted">Min</div>
-        <div class="fw-bold">{{ kpis.y_min }}</div>
-      </div>
-    </div>
+    <div class="card"><div class="card-body text-center">
+      <div class="small text-muted">Min</div><div class="fw-bold">{{ kpis.y_min }}</div>
+    </div></div>
   </div>
-
   <div class="col-md-2">
-    <div class="card">
-      <div class="card-body text-center">
-        <div class="small text-muted">Max</div>
-        <div class="fw-bold">{{ kpis.y_max }}</div>
-      </div>
-    </div>
+    <div class="card"><div class="card-body text-center">
+      <div class="small text-muted">Max</div><div class="fw-bold">{{ kpis.y_max }}</div>
+    </div></div>
   </div>
 </div>
 {% endif %}
 
-{# Preserve current query string for "Open" links #}
 {% set qs = request.query_string.decode('utf-8') %}
 {% set q = ('?' ~ qs) if qs else '' %}
 
@@ -90,7 +66,11 @@
     <div class="card">
       <div class="card-header">Bar Chart</div>
       <div class="card-body text-center">
-        {% if bar_url %}<img src="{{ bar_url }}" class="img-fluid" alt="Bar Chart">{% endif %}
+        {% if bar_url %}
+          <img src="{{ bar_url }}" class="img-fluid" alt="Bar Chart">
+        {% else %}
+          <div id="barDiv" style="min-height:280px;"></div>
+        {% endif %}
         <div class="mt-2">
           <a class="btn btn-outline-secondary btn-sm" href="/bar{{ q }}">Open</a>
           <a class="btn btn-outline-primary btn-sm" href="{{ url_for('static', filename='dashboard_bar.png') }}" download>Download</a>
@@ -104,7 +84,11 @@
     <div class="card">
       <div class="card-header">Line Chart</div>
       <div class="card-body text-center">
-        {% if line_url %}<img src="{{ line_url }}" class="img-fluid" alt="Line Chart">{% endif %}
+        {% if line_url %}
+          <img src="{{ line_url }}" class="img-fluid" alt="Line Chart">
+        {% else %}
+          <div id="lineDiv" style="min-height:280px;"></div>
+        {% endif %}
         <div class="mt-2">
           <a class="btn btn-outline-secondary btn-sm" href="/line{{ q }}">Open</a>
           <a class="btn btn-outline-primary btn-sm" href="{{ url_for('static', filename='dashboard_line.png') }}" download>Download</a>
@@ -118,7 +102,11 @@
     <div class="card">
       <div class="card-header">Pie Chart</div>
       <div class="card-body text-center">
-        {% if pie_url %}<img src="{{ pie_url }}" class="img-fluid" alt="Pie Chart">{% endif %}
+        {% if pie_url %}
+          <img src="{{ pie_url }}" class="img-fluid" alt="Pie Chart">
+        {% else %}
+          <div id="pieDiv" style="min-height:280px;"></div>
+        {% endif %}
         <div class="mt-2">
           <a class="btn btn-outline-secondary btn-sm" href="/pie{{ q }}">Open</a>
           <a class="btn btn-outline-primary btn-sm" href="{{ url_for('static', filename='dashboard_pie.png') }}" download>Download</a>
@@ -132,7 +120,11 @@
     <div class="card">
       <div class="card-header">Scatter Plot</div>
       <div class="card-body text-center">
-        {% if scatter_url %}<img src="{{ scatter_url }}" class="img-fluid" alt="Scatter Plot">{% endif %}
+        {% if scatter_url %}
+          <img src="{{ scatter_url }}" class="img-fluid" alt="Scatter Plot">
+        {% else %}
+          <div id="scatterDiv" style="min-height:320px;"></div>
+        {% endif %}
         <div class="mt-2">
           <a class="btn btn-outline-secondary btn-sm" href="/scatter{{ q }}">Open</a>
           <a class="btn btn-outline-primary btn-sm" href="{{ url_for('static', filename='dashboard_scatter.png') }}" download>Download</a>
@@ -146,7 +138,11 @@
     <div class="card">
       <div class="card-header">Heatmap</div>
       <div class="card-body text-center">
-        {% if heatmap_url %}<img src="{{ heatmap_url }}" class="img-fluid" alt="Heatmap">{% endif %}
+        {% if heatmap_url %}
+          <img src="{{ heatmap_url }}" class="img-fluid" alt="Heatmap">
+        {% else %}
+          <div id="heatmapDiv" style="min-height:320px;"></div>
+        {% endif %}
         <div class="mt-2">
           <a class="btn btn-outline-secondary btn-sm" href="/heatmap{{ q }}">Open</a>
           <a class="btn btn-outline-primary btn-sm" href="{{ url_for('static', filename='dashboard_heatmap.png') }}" download>Download</a>
@@ -156,5 +152,43 @@
   </div>
 
 </div>
+
+{# ---- Plotly only if any dashboard divs exist (i.e., PNG urls missing) ---- #}
+{% if not bar_url or not line_url or not pie_url or not scatter_url or not heatmap_url %}
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script>
+async function draw(divId, type){
+  const el = document.getElementById(divId);
+  if(!el) return;
+
+  const res = await fetch(`/api/chart/${type}` + window.location.search);
+  const obj = await res.json();
+
+  if(obj.error){
+    el.innerHTML = `<div class="alert alert-warning mb-0">${obj.error}</div>`;
+    return;
+  }
+
+  Plotly.newPlot(divId, obj.data, obj.layout, {responsive:true});
+
+  // click-to-drilldown
+  el.on('plotly_click', function(data){
+    if(!data.points || !data.points.length) return;
+    const x = data.points[0].x;
+    if(!x) return;
+    const url = new URL(window.location.origin + "/drill");
+    url.searchParams.set("to","data");
+    url.searchParams.set("category", x);
+    window.location.href = url.toString();
+  });
+}
+
+draw("barDiv","bar");
+draw("lineDiv","line");
+draw("pieDiv","pie");
+draw("scatterDiv","scatter");
+draw("heatmapDiv","heatmap");
+</script>
+{% endif %}
 
 {% endblock %}
