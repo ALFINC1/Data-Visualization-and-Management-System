@@ -12,220 +12,138 @@
     :root{
       --brand-dark:#2f4b7c;
       --brand-main:#3f6ad8;
-
-      --bg: #f4f6f9;
-      --surface: #ffffff;
-      --surface-2: #ffffff;
-      --border: rgba(0,0,0,.08);
-
-      --text: #212529;
-      --text-soft: #6c757d;
-
-      --shadow: 0 1px 3px rgba(0,0,0,.08);
-
-      --topbar-h: 56px;
-      --sidebar-w: 240px;
+      --bg:#f4f6f9;
+      --surface:#ffffff;
+      --surface-2:#ffffff;
+      --border:rgba(0,0,0,.08);
+      --text:#212529;
+      --text-soft:#6c757d;
+      --shadow:0 1px 3px rgba(0,0,0,.08);
+      --topbar-h:56px;
+      --sidebar-w:240px;
     }
 
     html[data-theme="dark"]{
-      --bg: #0f141b;
-      --surface: #151c26;
-      --surface-2: #111823;
-      --border: rgba(255,255,255,.10);
-
-      --text: #e9eef6;
-      --text-soft: rgba(233,238,246,.70);
-
-      --shadow: 0 2px 10px rgba(0,0,0,.35);
+      --bg:#0f141b;
+      --surface:#151c26;
+      --surface-2:#111823;
+      --border:rgba(255,255,255,.10);
+      --text:#e9eef6;
+      --text-soft:rgba(233,238,246,.70);
+      --shadow:0 2px 10px rgba(0,0,0,.35);
     }
 
-    body{
-      background: var(--bg);
-      color: var(--text);
-      margin:0;
-      font-size:14px;
-      overflow-x: hidden;
-    }
+    body{ background:var(--bg); color:var(--text); margin:0; font-size:14px; overflow-x:hidden; }
 
     /* TOPBAR */
     .dvms-topbar{
-      position: fixed;
-      top:0;
-      right:0;
-      left:0;
-      height: var(--topbar-h);
-      z-index: 1050;
-      background: #212529;
-      display:flex;
-      align-items:center;
-      transition: margin-left .25s ease;
+      position:fixed; top:0; left:0; right:0;
+      height:var(--topbar-h);
+      z-index:1050;
+      background:#212529;
+      display:flex; align-items:center;
+      transition:margin-left .25s ease;
     }
+    body:not(.sidebar-collapsed) .dvms-topbar{ margin-left:var(--sidebar-w); }
 
-    body:not(.sidebar-collapsed) .dvms-topbar{
-      margin-left: var(--sidebar-w);
-    }
-
-    /* SIDEBAR */
+    /* SIDEBAR (full height) */
     .dvms-sidebar{
-      position: fixed;
-      top:0;
-      left:0;
-      height: 100vh;
-      width: var(--sidebar-w);
-      background: var(--brand-dark);
-      z-index: 1040;
-      padding: 1rem;
-      overflow-y: auto;
-      transition: transform .25s ease;
+      position:fixed; top:0; left:0;
+      height:100vh; width:var(--sidebar-w);
+      background:var(--brand-dark);
+      z-index:1040;
+      padding:1rem;
+      overflow-y:auto;
+      transition:transform .25s ease;
     }
-
-    body.sidebar-collapsed .dvms-sidebar{
-      transform: translateX(calc(-1 * var(--sidebar-w)));
-    }
+    body.sidebar-collapsed .dvms-sidebar{ transform:translateX(calc(-1 * var(--sidebar-w))); }
 
     .dvms-sidebar a{
-      color:#e1e5f2;
-      text-decoration:none;
-      padding:8px 12px;
-      border-radius:6px;
-      display:block;
-      margin-bottom:6px;
+      color:#e1e5f2; text-decoration:none;
+      padding:8px 12px; border-radius:6px;
+      display:block; margin-bottom:6px;
     }
+    .dvms-sidebar a.active,.dvms-sidebar a:hover{ background:var(--brand-main); color:#fff; }
 
-    .dvms-sidebar a.active,
-    .dvms-sidebar a:hover{
-      background: var(--brand-main);
-      color:#fff;
-    }
-
-    /* MAIN CONTENT */
+    /* MAIN */
     .dvms-main{
-      padding-top: calc(var(--topbar-h) + 16px);
-      padding-right: 1.5rem;
-      padding-bottom: 1.5rem;
-      padding-left: 1.5rem;
-      transition: margin-left .25s ease;
-      min-height: 100vh;
+      padding-top:calc(var(--topbar-h) + 16px);
+      padding-left:1.5rem; padding-right:1.5rem; padding-bottom:1.5rem;
+      transition:margin-left .25s ease;
+      min-height:100vh;
     }
+    body:not(.sidebar-collapsed) .dvms-main{ margin-left:var(--sidebar-w); }
 
-    body:not(.sidebar-collapsed) .dvms-main{
-      margin-left: var(--sidebar-w);
-    }
-
-    /* SURFACES */
-    .card{
-      border:none;
-      box-shadow: var(--shadow);
-      background: var(--surface);
-      color: var(--text);
-    }
-    .card-header{
-      font-size:13px;
-      font-weight:600;
-      color: var(--text-soft);
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-    }
+    /* Cards / panels */
+    .card{ border:none; box-shadow:var(--shadow); background:var(--surface); color:var(--text); }
+    .card-header{ background:var(--surface); border-bottom:1px solid var(--border); color:var(--text-soft); font-weight:600; font-size:13px; }
 
     .filter-bar{
-      background: var(--surface);
-      border: 1px solid var(--border);
+      background:var(--surface);
+      border:1px solid var(--border);
       border-radius:10px;
       padding:12px;
       margin-bottom:14px;
     }
     .filter-title{
-      font-size:13px;
-      font-weight:600;
-      color: var(--text-soft);
+      font-size:13px; font-weight:600;
+      color:var(--text-soft);
       margin-bottom:10px;
-      display:flex;
-      align-items:center;
-      gap:8px;
+      display:flex; align-items:center; gap:8px;
     }
 
     html[data-theme="dark"] .form-control,
     html[data-theme="dark"] .form-select,
     html[data-theme="dark"] .input-group-text{
-      background: var(--surface-2);
-      color: var(--text);
-      border-color: var(--border);
+      background:var(--surface-2);
+      color:var(--text);
+      border-color:var(--border);
     }
 
     /* LOGIN PAGE */
     .login-shell{
-      min-height: calc(100vh - var(--topbar-h));
+      min-height:calc(100vh - var(--topbar-h));
       display:flex;
       justify-content:center;
       align-items:center;
       padding:1.5rem;
     }
-    .login-wrap{
-      width:100%;
-      max-width:460px;
-    }
+    .login-wrap{ width:100%; max-width:520px; }
 
-    /* FOOTER */
+    /* Footer */
     .dvms-footer{
-      background: var(--brand-dark);
+      background:var(--brand-dark);
       color:#d6dbeb;
       border-top:1px solid rgba(255,255,255,.08);
-      margin-left: 0;
-      transition: margin-left .25s ease;
+      transition:margin-left .25s ease;
     }
-    body:not(.sidebar-collapsed) .dvms-footer{
-      margin-left: var(--sidebar-w);
-    }
-    .footer-inner{
-      padding: 14px 0;
-      text-align:center;
-      font-size:12px;
-    }
-    .footer-icons a{
-      color:#d3d8e9;
-      margin:0 10px;
-      font-size:16px;
-      transition:color .2s ease, transform .2s ease;
-    }
-    .footer-icons a:hover{
-      color: var(--brand-main);
-      transform: translateY(-2px);
-    }
+    body:not(.sidebar-collapsed) .dvms-footer{ margin-left:var(--sidebar-w); }
+    .footer-inner{ padding:14px 0; text-align:center; font-size:12px; }
 
-    /* BACK TO TOP */
-    .back-to-top{
-      position: fixed;
-      right: 18px;
-      bottom: 18px;
-      z-index: 2000;
-      display:none;
-      border-radius: 999px;
-      box-shadow: var(--shadow);
-    }
+    /* Important: on login page don't shift anything */
+    body.login-page .dvms-topbar{ margin-left:0 !important; }
+    body.login-page .dvms-main{ margin-left:0 !important; }
 
     @media (max-width: 992px){
-      body:not(.sidebar-collapsed) .dvms-topbar{ margin-left: 0; }
-      body:not(.sidebar-collapsed) .dvms-main{ margin-left: 0; }
-      body:not(.sidebar-collapsed) .dvms-footer{ margin-left: 0; }
-      .dvms-sidebar{ box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+      body:not(.sidebar-collapsed) .dvms-topbar{ margin-left:0; }
+      body:not(.sidebar-collapsed) .dvms-main{ margin-left:0; }
+      body:not(.sidebar-collapsed) .dvms-footer{ margin-left:0; }
+      .dvms-sidebar{ box-shadow:0 10px 30px rgba(0,0,0,.35); }
     }
   </style>
 </head>
 
-<body>
+<body class="{% if request.endpoint == 'login' %}login-page sidebar-collapsed{% endif %}">
 
-{# Define block once (do not render here) #}
 {% if false %}{% block content %}{% endblock %}{% endif %}
-
 {% set is_login_page = (request.endpoint == 'login') %}
 
 <!-- TOPBAR -->
 <nav class="dvms-topbar navbar navbar-dark">
   <div class="container-fluid d-flex align-items-center justify-content-between gap-2">
-
     <div class="d-flex align-items-center gap-2">
       {% if not is_login_page %}
-        <button id="sidebarToggle" class="btn btn-outline-light btn-sm" onclick="toggleSidebar()" type="button">
+        <button class="btn btn-outline-light btn-sm" type="button" onclick="toggleSidebar()">
           <i class="bi bi-list"></i>
         </button>
       {% endif %}
@@ -233,7 +151,7 @@
     </div>
 
     <div class="d-flex align-items-center gap-2">
-      <button id="themeToggle" class="btn btn-outline-light btn-sm" type="button" title="Toggle dark mode" aria-label="Toggle dark mode">
+      <button id="themeToggle" class="btn btn-outline-light btn-sm" type="button" title="Toggle dark mode">
         <i class="bi bi-moon-stars"></i>
       </button>
 
@@ -250,13 +168,11 @@
         {% endif %}
       {% endif %}
     </div>
-
   </div>
 </nav>
 
 {% if is_login_page %}
-
-  <!-- LOGIN -->
+  <!-- LOGIN: no sidebar, no filter bar -->
   <div class="login-shell">
     <div class="login-wrap">
       {% with msgs = get_flashed_messages(with_categories=true) %}
@@ -268,7 +184,6 @@
           {% endfor %}
         {% endif %}
       {% endwith %}
-
       {{ self.content() }}
     </div>
   </div>
@@ -303,7 +218,7 @@
       {% endif %}
     {% endwith %}
 
-    <!-- Filters -->
+    <!-- ✅ RESTORED: Filters & Controls panel -->
     <div class="filter-bar">
       <div class="filter-title">
         <i class="bi bi-funnel"></i> Filters &amp; Controls
@@ -312,6 +227,8 @@
 
       <div id="filtersPanel">
         <form class="row g-2 align-items-end" method="get" action="{{ request.path }}">
+
+          <!-- Preserve table controls when filtering -->
           {% if request.args.get('search') %}<input type="hidden" name="search" value="{{ request.args.get('search') }}">{% endif %}
           {% if request.args.get('sort') %}<input type="hidden" name="sort" value="{{ request.args.get('sort') }}">{% endif %}
           {% if request.args.get('order') %}<input type="hidden" name="order" value="{{ request.args.get('order') }}">{% endif %}
@@ -343,12 +260,14 @@
 
           <div class="col-md-2">
             <label class="form-label small text-muted mb-1">Min</label>
-            <input type="number" step="any" name="min" class="form-control form-control-sm" value="{{ filters.min if filters is defined else '' }}">
+            <input type="number" step="any" name="min" class="form-control form-control-sm"
+                   value="{% if filters is defined %}{{ filters.min }}{% endif %}">
           </div>
 
           <div class="col-md-2">
             <label class="form-label small text-muted mb-1">Max</label>
-            <input type="number" step="any" name="max" class="form-control form-control-sm" value="{{ filters.max if filters is defined else '' }}">
+            <input type="number" step="any" name="max" class="form-control form-control-sm"
+                   value="{% if filters is defined %}{{ filters.max }}{% endif %}">
           </div>
 
           <div class="col-md-2 d-grid gap-2">
@@ -378,11 +297,12 @@
               {% endif %}
             </span>
           </div>
+
         </form>
 
         {% if role is defined and role == "admin" %}
         <div class="mt-3">
-          <div class="small text-muted mb-1"><i class="bi bi-upload"></i> Upload Dataset</div>
+          <div class="small text-muted mb-1"><i class="bi bi-upload"></i> Upload Dataset (CSV/XLS/XLSX)</div>
           <form action="/upload" method="post" enctype="multipart/form-data" class="d-flex gap-2">
             <input class="form-control form-control-sm" type="file" name="file" required>
             <button class="btn btn-success btn-sm" type="submit">Upload</button>
@@ -404,9 +324,9 @@
           {% if presets is defined and presets %}
             <div class="mt-2 d-flex gap-2 flex-wrap">
               {% for p in presets[:8] %}
-                <a class="btn btn-outline-secondary mini-btn" href="/presets/apply/{{ p.id }}">{{ p.name }}</a>
+                <a class="btn btn-outline-secondary btn-sm" href="/presets/apply/{{ p.id }}">{{ p.name }}</a>
                 {% if role is defined and role == "admin" %}
-                  <a class="btn btn-outline-danger mini-btn" href="/presets/delete/{{ p.id }}"><i class="bi bi-trash"></i></a>
+                  <a class="btn btn-outline-danger btn-sm" href="/presets/delete/{{ p.id }}"><i class="bi bi-trash"></i></a>
                 {% endif %}
               {% endfor %}
             </div>
@@ -422,11 +342,6 @@
   <footer class="dvms-footer">
     <div class="footer-inner">
       © <span id="year"></span> Developed by Fadil Ahmed
-      <span class="footer-icons ms-0">
-        <a href="https://www.linkedin.com/in/fadilahmed123" target="_blank" aria-label="LinkedIn"><i class="bi bi-linkedin"></i></a>
-        <a href="https://github.com/ALFINC1" target="_blank" aria-label="GitHub"><i class="bi bi-github"></i></a>
-        <a href="https://t.me/ALFINC1" target="_blank" aria-label="Telegram"><i class="bi bi-telegram"></i></a>
-      </span>
     </div>
   </footer>
 
@@ -441,7 +356,9 @@ function toggleSidebar(){
     localStorage.setItem("dvms_sidebar", document.body.classList.contains("sidebar-collapsed") ? "1" : "0");
   } catch(e){}
 }
+
 (function(){
+  if(document.body.classList.contains("login-page")) return;
   try {
     if(localStorage.getItem("dvms_sidebar") === "1"){
       document.body.classList.add("sidebar-collapsed");
@@ -455,8 +372,7 @@ function toggleFilters(){
   p.style.display = (p.style.display === "none") ? "block" : "none";
 }
 
-const y = document.getElementById("year");
-if(y) y.textContent = new Date().getFullYear();
+document.getElementById("year") && (document.getElementById("year").textContent = new Date().getFullYear());
 
 function copyShareLink(){
   const link = "{{ share_url|default(request.url) }}";
@@ -479,33 +395,16 @@ function copyShareLink(){
 
   let saved = null;
   try { saved = localStorage.getItem("dvms_theme"); } catch(e){}
-  if(saved){
-    setTheme(saved);
-  } else {
+  if(saved){ setTheme(saved); }
+  else {
     const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
     setTheme(prefersDark ? "dark" : "light");
   }
 
-  if(btn){
-    btn.addEventListener("click", function(){
-      const current = root.getAttribute("data-theme") || "light";
-      setTheme(current === "dark" ? "light" : "dark");
-    });
-  }
-})();
-</script>
-
-<button id="backToTop" class="btn btn-primary back-to-top" type="button" aria-label="Back to top">
-  <i class="bi bi-arrow-up"></i>
-</button>
-<script>
-(function(){
-  const btn = document.getElementById("backToTop");
-  if(!btn) return;
-  window.addEventListener("scroll", () => {
-    btn.style.display = (window.scrollY > 350) ? "inline-flex" : "none";
+  btn && btn.addEventListener("click", () => {
+    const current = root.getAttribute("data-theme") || "light";
+    setTheme(current === "dark" ? "light" : "dark");
   });
-  btn.addEventListener("click", () => window.scrollTo({top:0, behavior:"smooth"}));
 })();
 </script>
 

@@ -338,7 +338,6 @@ def compute_kpis(where_clause, params, x_col, y_col):
             y_mean = stats.loc[0, "av"]
             y_max = stats.loc[0, "mx"]
 
-        # estimate numeric cols from sample
         df_sample = pd.read_sql_query(f"SELECT * FROM {DATA_TABLE} LIMIT 300", conn)
         numeric_cols = len(df_sample.select_dtypes(include="number").columns)
 
@@ -465,6 +464,54 @@ def login():
         return redirect(url_for("index"))
 
     return render_template("login.html", **base_context(), title="Login")
+
+
+# REGISTER ROUTE  (viewer/user only)
+@app.route("/register", methods=["POST"])
+def register():
+    init_db()
+    ensure_dataset_imported()
+
+    username = (request.form.get("username") or "").strip()
+    password = (request.form.get("password") or "").strip()
+    confirm = (request.form.get("confirm_password") or "").strip()
+
+    if len(username) < 3:
+        flash("Username must be at least 3 characters.", "danger")
+        return redirect(url_for("login") + "#register")
+
+    reserved = {ADMIN_USER.lower(), "admin", "administrator", "root"}
+    if username.lower() in reserved:
+        flash("This username is reserved. Choose another username.", "danger")
+        return redirect(url_for("login") + "#register")
+
+    if len(password) < 6:
+        flash("Password must be at least 6 characters.", "danger")
+        return redirect(url_for("login") + "#register")
+
+    if password != confirm:
+        flash("Passwords do not match.", "danger")
+        return redirect(url_for("login") + "#register")
+
+    role = "viewer"  # Admin cannot be created from UI
+
+    conn = db()
+    try:
+        exists = conn.execute("SELECT username FROM users WHERE username=?", (username,)).fetchone()
+        if exists:
+            flash("Username already exists. Try another.", "danger")
+            return redirect(url_for("login") + "#register")
+
+        conn.execute(
+            "INSERT INTO users(username, password_hash, role) VALUES(?,?,?)",
+            (username, generate_password_hash(password), role)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    flash("Account created successfully! You can login now.", "success")
+    return redirect(url_for("login", username=username))
 
 
 @app.route("/logout")
@@ -656,6 +703,7 @@ def drill():
 
 
 # INTERACTIVE CHART API
+# ✅ ONLY CHANGE: FIXED route so /api/chart/bar works
 @app.route("/api/chart/<chart_type>")
 def api_chart(chart_type):
     ensure_dataset_imported()
@@ -730,22 +778,18 @@ def index():
     where_clause, params = build_where(x_col, y_col, date_col)
     ctx["kpis"] = compute_kpis(where_clause, params, x_col, y_col)
 
-    # Get data subset for plotting
     df_plot = sample_df(limit=8000, where_clause=where_clause, params=params)
     if df_plot.empty or not x_col or not y_col:
         ctx["error"] = "No data matches the selected filters."
         return render_template("index.html", **ctx, title="Analytics Dashboard")
 
-    # top categories for drilldown
     ctx["top_categories"] = (
         df_plot[x_col].astype(str).value_counts().head(5).index.tolist()
         if x_col in df_plot.columns else []
     )
 
-    # Build grouped
     grouped = df_plot.groupby(x_col)[y_col].mean().sort_values(ascending=False).head(5)
 
-    # BAR
     bar_file = "dashboard_bar.png"
     plt.figure(figsize=(4, 3))
     plt.bar(grouped.index.astype(str), grouped.values, color="#3f6ad8")
@@ -754,7 +798,6 @@ def index():
     plt.savefig(os.path.join(STATIC_DIR, bar_file), dpi=130, bbox_inches="tight")
     plt.close()
 
-    # LINE
     line_file = "dashboard_line.png"
     plt.figure(figsize=(4, 3))
     plt.plot(grouped.index.astype(str), grouped.values, linewidth=2, color="#3f6ad8")
@@ -763,7 +806,6 @@ def index():
     plt.savefig(os.path.join(STATIC_DIR, line_file), dpi=130, bbox_inches="tight")
     plt.close()
 
-    # PIE 
     pie_file = "dashboard_pie.png"
     top = df_plot[x_col].astype(str).value_counts().head(5)
     plt.figure(figsize=(4, 3))
@@ -772,7 +814,6 @@ def index():
     plt.savefig(os.path.join(STATIC_DIR, pie_file), dpi=130, bbox_inches="tight")
     plt.close()
 
-    # SCATTER 
     scatter_file = "dashboard_scatter.png"
     nums = df_plot.select_dtypes(include="number")
     plt.figure(figsize=(4, 3))
@@ -787,7 +828,6 @@ def index():
     plt.savefig(os.path.join(STATIC_DIR, scatter_file), dpi=130, bbox_inches="tight")
     plt.close()
 
-    # HEATMAP
     heatmap_file = "dashboard_heatmap.png"
     save_heatmap_png(df_plot, os.path.join(STATIC_DIR, heatmap_file), title="Correlation Heatmap", small=True)
 
@@ -886,7 +926,6 @@ def profile():
         high = q3 + 1.5 * iqr
         outliers[c] = int(((s < low) | (s > high)).sum())
 
-    # histogram column
     col = request.args.get("col")
     if not col:
         num_cols = df.select_dtypes(include="number").columns.tolist()
@@ -914,164 +953,35 @@ def profile():
 def bar_chart():
     if not login_required():
         return redirect(url_for("login"))
-
-    x_col, y_col = pick_columns()
-    date_col = detect_date_column()
-    ctx = base_context()
-
-    where_clause, params = build_where(x_col, y_col, date_col)
-    df_plot = sample_df(limit=10000, where_clause=where_clause, params=params)
-
-    if df_plot.empty or not x_col or not y_col:
-        ctx["error"] = "No data matches the selected filters."
-        return render_template("chart.html", **ctx, title="Bar Chart")
-
-    grouped = df_plot.groupby(x_col)[y_col].mean().sort_values(ascending=False).head(10)
-    out_file = "bar.png"
-
-    plt.figure(figsize=(10, 5))
-    plt.bar(grouped.index.astype(str), grouped.values, color="#3f6ad8")
-    plt.xlabel(x_col)
-    plt.ylabel(f"{y_col} (Mean)")
-    plt.xticks(rotation=ROTATION, ha="right")
-    plt.tight_layout()
-    plt.savefig(os.path.join(STATIC_DIR, out_file), dpi=140, bbox_inches="tight")
-    plt.close()
-
-    ctx.update(
-        chart_url=url_for("static", filename=out_file) + f"?v={int(time.time())}",
-        download_url=url_for("static", filename=out_file),
-        download_name=out_file,
-        top_categories=grouped.index.astype(str).tolist()
-    )
-    return render_template("chart.html", **ctx, title="Bar Chart")
+    return render_template("chart.html", **base_context(), chart_type="bar", title="Bar Chart")
 
 
 @app.route("/line")
 def line_chart():
     if not login_required():
         return redirect(url_for("login"))
-
-    x_col, y_col = pick_columns()
-    date_col = detect_date_column()
-    ctx = base_context()
-
-    where_clause, params = build_where(x_col, y_col, date_col)
-    df_plot = sample_df(limit=10000, where_clause=where_clause, params=params)
-
-    if df_plot.empty or not x_col or not y_col:
-        ctx["error"] = "No data matches the selected filters."
-        return render_template("chart.html", **ctx, title="Line Chart")
-
-    grouped = df_plot.groupby(x_col)[y_col].mean().sort_values(ascending=False).head(10)
-    out_file = "line.png"
-
-    plt.figure(figsize=(10, 5))
-    plt.plot(grouped.index.astype(str), grouped.values, linewidth=2, color="#3f6ad8")
-    plt.xlabel(x_col)
-    plt.ylabel(y_col)
-    plt.xticks(rotation=ROTATION, ha="right")
-    plt.tight_layout()
-    plt.savefig(os.path.join(STATIC_DIR, out_file), dpi=140, bbox_inches="tight")
-    plt.close()
-
-    ctx.update(
-        chart_url=url_for("static", filename=out_file) + f"?v={int(time.time())}",
-        download_url=url_for("static", filename=out_file),
-        download_name=out_file,
-    )
-    return render_template("chart.html", **ctx, title="Line Chart")
+    return render_template("chart.html", **base_context(), chart_type="line", title="Line Chart")
 
 
 @app.route("/scatter")
 def scatter_chart():
     if not login_required():
         return redirect(url_for("login"))
-
-    x_col, y_col = pick_columns()
-    date_col = detect_date_column()
-    ctx = base_context()
-
-    where_clause, params = build_where(x_col, y_col, date_col)
-    df_plot = sample_df(limit=8000, where_clause=where_clause, params=params)
-
-    nums = df_plot.select_dtypes(include="number")
-    out_file = "scatter.png"
-
-    plt.figure(figsize=(8, 6))
-    if nums.shape[1] >= 2:
-        plt.scatter(nums.iloc[:, 0], nums.iloc[:, 1], alpha=0.7, color="#00a8a8")
-        plt.xlabel(nums.columns[0])
-        plt.ylabel(nums.columns[1])
-    else:
-        plt.axis("off")
-        plt.text(0.5, 0.5, "Not enough numeric columns", ha="center", va="center")
-    plt.tight_layout()
-    plt.savefig(os.path.join(STATIC_DIR, out_file), dpi=140, bbox_inches="tight")
-    plt.close()
-
-    ctx.update(
-        chart_url=url_for("static", filename=out_file) + f"?v={int(time.time())}",
-        download_url=url_for("static", filename=out_file),
-        download_name=out_file,
-    )
-    return render_template("chart.html", **ctx, title="Scatter Plot")
+    return render_template("chart.html", **base_context(), chart_type="scatter", title="Scatter Plot")
 
 
 @app.route("/heatmap")
 def heatmap_chart():
     if not login_required():
         return redirect(url_for("login"))
-
-    x_col, y_col = pick_columns()
-    date_col = detect_date_column()
-    ctx = base_context()
-
-    where_clause, params = build_where(x_col, y_col, date_col)
-    df_plot = sample_df(limit=10000, where_clause=where_clause, params=params)
-
-    out_file = "heatmap.png"
-    save_heatmap_png(df_plot, os.path.join(STATIC_DIR, out_file), title="Correlation Heatmap", small=False)
-
-    ctx.update(
-        chart_url=url_for("static", filename=out_file) + f"?v={int(time.time())}",
-        download_url=url_for("static", filename=out_file),
-        download_name=out_file
-    )
-    return render_template("chart.html", **ctx, title="Heatmap")
+    return render_template("chart.html", **base_context(), chart_type="heatmap", title="Heatmap")
 
 
 @app.route("/pie")
 def pie_chart():
     if not login_required():
         return redirect(url_for("login"))
-
-    x_col, y_col = pick_columns()
-    date_col = detect_date_column()
-    ctx = base_context()
-
-    where_clause, params = build_where(x_col, y_col, date_col)
-    df_plot = sample_df(limit=10000, where_clause=where_clause, params=params)
-
-    if df_plot.empty or not x_col or x_col not in df_plot.columns:
-        ctx["error"] = "No data matches the selected filters."
-        return render_template("pie.html", **ctx, title="Pie Chart")
-
-    top = df_plot[x_col].astype(str).value_counts().head(10)
-    out_file = "pie.png"
-
-    plt.figure(figsize=(7, 7))
-    plt.pie(top.values, labels=top.index.tolist(), autopct="%1.1f%%")
-    plt.tight_layout()
-    plt.savefig(os.path.join(STATIC_DIR, out_file), dpi=140, bbox_inches="tight")
-    plt.close()
-
-    ctx.update(
-        pie_url=url_for("static", filename=out_file) + f"?v={int(time.time())}",
-        download_url=url_for("static", filename=out_file),
-        download_name=out_file
-    )
-    return render_template("pie.html", **ctx, title="Pie Chart")
+    return render_template("chart.html", **base_context(), chart_type="pie", title="Pie Chart")
 
 
 if __name__ == "__main__":

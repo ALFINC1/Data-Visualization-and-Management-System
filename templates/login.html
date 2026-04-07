@@ -4,112 +4,212 @@
 <div class="card shadow-sm border-0">
   <div class="card-body p-4">
 
-    <!-- Title -->
+    <!-- Brand -->
     <div class="text-center mb-3">
       <div class="d-inline-flex align-items-center justify-content-center rounded-circle"
            style="width:52px;height:52px;background:#3f6ad8;color:#fff;">
         <i class="bi bi-bar-chart-line-fill fs-4"></i>
       </div>
 
-      <h4 class="mt-3 mb-1 fw-semibold">Welcome!</h4>
-      <div class="small text-muted">
-        Data Visualization &amp; Management System
-      </div>
+      <h4 class="mt-3 mb-1 fw-semibold">Welcome to DVMS</h4>
+      <div class="small text-muted">Data Visualization &amp; Management System</div>
     </div>
 
-    <!-- Login Form -->
-    <form method="post" class="mt-3" autocomplete="on">
-      <div class="mb-3">
-        <label class="form-label">Username</label>
-        <div class="input-group">
-          <span class="input-group-text"><i class="bi bi-person"></i></span>
-          <input
-            class="form-control"
-            name="username"
-            required
-            autocomplete="username"
-            placeholder="Enter your username"
-          >
-        </div>
-      </div>
+    <!-- Tabs: Login / Create Account -->
+    <ul class="nav nav-pills nav-fill mb-3" id="authTabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="login-tab" data-bs-toggle="pill" data-bs-target="#loginPane" type="button" role="tab">
+          <i class="bi bi-box-arrow-in-right"></i> Login
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="register-tab" data-bs-toggle="pill" data-bs-target="#registerPane" type="button" role="tab">
+          <i class="bi bi-person-plus"></i> Create Account
+        </button>
+      </li>
+    </ul>
 
-      <div class="mb-2">
-        <label class="form-label">Password</label>
-        <div class="input-group">
-          <span class="input-group-text"><i class="bi bi-shield-lock"></i></span>
-          <input
-            id="passwordInput"
-            class="form-control"
-            type="password"
-            name="password"
-            required
-            autocomplete="current-password"
-            placeholder="Enter your password"
-          >
-          <button class="btn btn-outline-secondary" type="button" id="togglePasswordBtn" aria-label="Show password">
-            <i class="bi bi-eye"></i>
+    <div class="tab-content" id="authTabsContent">
+
+      <!-- ===================== LOGIN ===================== -->
+      <div class="tab-pane fade show active" id="loginPane" role="tabpanel" aria-labelledby="login-tab">
+        <form method="post" action="{{ url_for('login') }}" class="mt-2" autocomplete="on">
+          <div class="mb-3">
+            <label class="form-label">Username</label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="bi bi-person"></i></span>
+              <input
+                class="form-control"
+                name="username"
+                required
+                autocomplete="username"
+                placeholder="Enter your username"
+                value="{{ request.args.get('username','') }}"
+              >
+            </div>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label">Password</label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="bi bi-shield-lock"></i></span>
+              <input
+                id="passwordInputLogin"
+                class="form-control"
+                type="password"
+                name="password"
+                required
+                autocomplete="current-password"
+                placeholder="Enter your password"
+              >
+              <button class="btn btn-outline-secondary" type="button" id="togglePasswordBtnLogin" aria-label="Show password">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
+
+            <div id="capsWarningLogin" class="small text-warning mt-2 d-none">
+              <i class="bi bi-exclamation-triangle"></i> Caps Lock is ON
+            </div>
+          </div>
+
+          <div class="d-flex align-items-center justify-content-between mb-3 mt-3">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="1" id="rememberMe" name="remember">
+              <label class="form-check-label small" for="rememberMe">Remember me</label>
+            </div>
+
+            <a href="#" class="small text-decoration-none" onclick="return false;" title="Not implemented">
+              Forgot password?
+            </a>
+          </div>
+
+          <button class="btn btn-primary w-100 py-2 fw-semibold" type="submit">
+            <i class="bi bi-box-arrow-in-right me-1"></i> Login
           </button>
-        </div>
+        </form>
 
-        <div id="capsWarning" class="small text-warning mt-2 d-none">
-          <i class="bi bi-exclamation-triangle"></i> Caps Lock is ON
+        <div class="mt-3 p-3 rounded-3"
+             style="background:rgba(63,106,216,0.07); border:1px solid rgba(63,106,216,0.15);">
+          <div class="small text-muted">
+            <i class="bi bi-info-circle"></i> Admin accounts are created only in the database (system-managed).
+          </div>
         </div>
       </div>
 
-      <div class="d-flex align-items-center justify-content-between mb-3 mt-3">
-        <div class="form-check">
-          <input class="form-check-input" type="checkbox" value="1" id="rememberMe" name="remember">
-          <label class="form-check-label small" for="rememberMe">Remember me</label>
+      <!-- ===================== REGISTER (Viewer/User) ===================== -->
+      <div class="tab-pane fade" id="registerPane" role="tabpanel" aria-labelledby="register-tab">
+
+        <!-- ✅ FIX: real form action + POST -->
+        <form method="post" action="{{ url_for('register') }}" class="mt-2" autocomplete="on">
+          <div class="mb-3">
+            <label class="form-label">Choose Username</label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="bi bi-person-plus"></i></span>
+              <input
+                class="form-control"
+                name="username"
+                required
+                autocomplete="username"
+                placeholder="e.g. user1"
+              >
+            </div>
+            <div class="form-text">
+              This account will be created as <b>Viewer/User</b>. Admin cannot be created here.
+            </div>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label">Create Password</label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="bi bi-lock"></i></span>
+              <input
+                id="passwordInputReg"
+                class="form-control"
+                type="password"
+                name="password"
+                required
+                autocomplete="new-password"
+                placeholder="Create a strong password"
+              >
+              <button class="btn btn-outline-secondary" type="button" id="togglePasswordBtnReg" aria-label="Show password">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
+            <div class="form-text">
+              Recommended: 8+ chars, mix of letters &amp; numbers.
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Confirm Password</label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="bi bi-check2-circle"></i></span>
+              <input
+                id="passwordConfirmReg"
+                class="form-control"
+                type="password"
+                name="confirm_password"
+                required
+                autocomplete="new-password"
+                placeholder="Re-type password"
+              >
+            </div>
+
+            <div id="capsWarningReg" class="small text-warning mt-2 d-none">
+              <i class="bi bi-exclamation-triangle"></i> Caps Lock is ON
+            </div>
+          </div>
+
+          <button class="btn btn-success w-100 py-2 fw-semibold" type="submit">
+            <i class="bi bi-person-check me-1"></i> Create Account
+          </button>
+        </form>
+
+        <div class="mt-3 small text-muted">
+          Already have an account? Click the <b>Login</b> tab.
         </div>
-
-        <a href="#" class="small text-decoration-none" onclick="return false;" title="Not implemented">
-          Forgot password?
-        </a>
       </div>
-
-      <button class="btn btn-primary w-100 py-2 fw-semibold">
-        <i class="bi bi-box-arrow-in-right me-1"></i> Login
-      </button>
-    </form>
 
     </div>
-
   </div>
 </div>
 
 <script>
 (function () {
-  const pwd = document.getElementById("passwordInput");
-  const btn = document.getElementById("togglePasswordBtn");
-  const caps = document.getElementById("capsWarning");
+  function bindToggle(pwdId, btnId) {
+    const pwd = document.getElementById(pwdId);
+    const btn = document.getElementById(btnId);
+    if (!pwd || !btn) return;
 
-  if (btn && pwd) {
     btn.addEventListener("click", () => {
       const isHidden = pwd.type === "password";
       pwd.type = isHidden ? "text" : "password";
       btn.innerHTML = isHidden ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
       btn.setAttribute("aria-label", isHidden ? "Hide password" : "Show password");
     });
+  }
+
+  function bindCapsWarning(pwdId, warnId) {
+    const pwd = document.getElementById(pwdId);
+    const warn = document.getElementById(warnId);
+    if (!pwd || !warn) return;
 
     pwd.addEventListener("keyup", (e) => {
-      if (!caps) return;
       const isCaps = e.getModifierState && e.getModifierState("CapsLock");
-      caps.classList.toggle("d-none", !isCaps);
+      warn.classList.toggle("d-none", !isCaps);
     });
   }
 
-  const copyBtn = document.getElementById("copyDemoBtn");
-  if (copyBtn) {
-    copyBtn.addEventListener("click", async () => {
-      const text = "admin / admin123";
-      try {
-        await navigator.clipboard.writeText(text);
-        copyBtn.innerHTML = '<i class="bi bi-check2"></i> Copied';
-        setTimeout(() => copyBtn.innerHTML = '<i class="bi bi-clipboard"></i> Copy', 1200);
-      } catch {
-        prompt("Copy demo credentials:", text);
-      }
-    });
+  bindToggle("passwordInputLogin", "togglePasswordBtnLogin");
+  bindCapsWarning("passwordInputLogin", "capsWarningLogin");
+
+  bindToggle("passwordInputReg", "togglePasswordBtnReg");
+  bindCapsWarning("passwordConfirmReg", "capsWarningReg");
+
+  // ✅ FIX: if backend redirects to /login#register, open Register tab automatically
+  if (window.location.hash === "#register") {
+    const btn = document.getElementById("register-tab");
+    if (btn) btn.click();
   }
 })();
 </script>
