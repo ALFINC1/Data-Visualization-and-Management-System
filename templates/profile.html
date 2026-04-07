@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 
+{# ---------------- Derived metrics (template-only) ---------------- #}
 {% set total_missing = 0 %}
 {% for k, v in missing.items() %}
   {% set total_missing = total_missing + v %}
@@ -23,16 +24,15 @@
   {% endif %}
 {% endfor %}
 
+{# Preserve current query string (optional) #}
+{% set open_section = request.args.get('open','') %}
+
 <div class="d-flex flex-wrap align-items-center justify-content-between mb-2">
   <div>
     <h5 class="mb-1 text-secondary">Data Quality &amp; Profiling</h5>
     <div class="small text-muted">
       Dataset:
       <strong>{{ active_data_path if active_data_path is defined else "default" }}</strong>
-      {% if user is defined and user %}
-        · User: <strong>{{ user }}</strong>
-        · Role: <strong>{{ role if role is defined else "viewer" }}</strong>
-      {% endif %}
     </div>
   </div>
 
@@ -53,6 +53,26 @@
   </div>
 </div>
 
+<!-- ✅ User info card (Admin/User shown clearly) -->
+<div class="card mb-3">
+  <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <div>
+      <div class="small text-muted">Logged in as</div>
+      <div class="fw-semibold">
+        {{ user if user is defined and user else "Unknown" }}
+        {% set role_label = role if role is defined else "viewer" %}
+        <span class="badge {{ 'bg-danger' if role_label=='admin' else ('bg-primary' if role_label in ['user','viewer'] else 'bg-secondary') }} ms-2">
+          {{ role_label|title }}
+        </span>
+      </div>
+    </div>
+    <div class="small text-muted">
+      Tip: Admin can upload/reset dataset and manage presets. Users can explore and export.
+    </div>
+  </div>
+</div>
+
+<!-- KPI Cards -->
 <div class="row g-3 mb-3">
   <div class="col-md-2">
     <div class="card">
@@ -246,7 +266,16 @@
     <div id="collapseHist" class="accordion-collapse collapse" aria-labelledby="headingHist" data-bs-parent="#profileAccordion">
       <div class="accordion-body">
 
-        <form method="get" class="row g-2 mb-2">
+        <!-- ✅ FIX: action explicitly points to /profile (prevents redirect to dashboard) -->
+        <form method="get" action="{{ url_for('profile') }}" class="row g-2 mb-2">
+          <input type="hidden" name="open" value="hist">
+
+          <!-- Optional: preserve filters if you ever want them -->
+          <input type="hidden" name="category" value="{{ request.args.get('category','') }}">
+          <input type="hidden" name="date" value="{{ request.args.get('date','') }}">
+          <input type="hidden" name="min" value="{{ request.args.get('min','') }}">
+          <input type="hidden" name="max" value="{{ request.args.get('max','') }}">
+
           <div class="col-md-6">
             <select class="form-select form-select-sm" name="col">
               {% for c in all_columns %}
@@ -274,9 +303,13 @@
 
 </div>
 
+<!-- ✅ Plotly script required for histogram -->
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
 <script>
 (function () {
 
+  // Table search helper
   function bindSearch(inputId, tableId) {
     const input = document.getElementById(inputId);
     const table = document.getElementById(tableId);
@@ -296,7 +329,7 @@
   bindSearch("outlierSearch", "outlierTable");
   bindSearch("dtypeSearch", "dtypeTable");
 
-  // Plotly histogram 
+  // Render histogram
   const target = document.getElementById("histDiv");
 
   {% if hist_json %}
@@ -305,6 +338,18 @@
   {% else %}
     if (target) target.innerHTML = "<div class='alert alert-warning mb-0'>No numeric column available.</div>";
   {% endif %}
+
+  // ✅ Auto-open histogram section after clicking View
+  const open = "{{ open_section }}";
+  if (open === "hist") {
+    const el = document.getElementById("collapseHist");
+    if (el) {
+      const bs = bootstrap.Collapse.getOrCreateInstance(el, {toggle:false});
+      bs.show();
+      // scroll into view (nice UX)
+      setTimeout(() => el.scrollIntoView({behavior:"smooth", block:"start"}), 200);
+    }
+  }
 
 })();
 </script>
