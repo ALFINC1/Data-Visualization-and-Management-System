@@ -3,12 +3,10 @@
 
 <h5 class="mb-2 text-secondary">Data Table</h5>
 
-{# ---- page stats ---- #}
 {% set max_pages = ((total - 1) // per_page) + 1 if total and per_page else 1 %}
 {% set start_row = ((page - 1) * per_page) + 1 if total > 0 else 0 %}
 {% set end_row = (page * per_page) if (page * per_page) < total else total %}
 
-{# ---- query string without page ---- #}
 {% set ns = namespace(qs='') %}
 {% for k, v in request.args.items() %}
   {% if k != 'page' %}

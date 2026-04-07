@@ -270,7 +270,7 @@ def build_where(x_col, y_col, date_col, scatter_cols=None):
                 where.append(f"{y_col} <= ?")
                 params.append(mx)
 
-    # search across all columns
+    # search
     if search:
         cols = get_columns()
         parts = []
@@ -474,7 +474,7 @@ def logout():
     return redirect(url_for("login"))
 
 
-# UPLOAD (ADMIN)
+# UPLOAD 
 @app.route("/upload", methods=["POST"])
 def upload_dataset():
     if not admin_required():
@@ -714,7 +714,7 @@ def api_chart(chart_type):
     return Response(fig.to_json(), mimetype="application/json")
 
 
-# DASHBOARD (PNG charts) 
+# DASHBOARD 
 @app.route("/")
 def index():
     init_db()
@@ -763,7 +763,7 @@ def index():
     plt.savefig(os.path.join(STATIC_DIR, line_file), dpi=130, bbox_inches="tight")
     plt.close()
 
-    # PIE (top 5 counts)
+    # PIE 
     pie_file = "dashboard_pie.png"
     top = df_plot[x_col].astype(str).value_counts().head(5)
     plt.figure(figsize=(4, 3))
@@ -772,7 +772,7 @@ def index():
     plt.savefig(os.path.join(STATIC_DIR, pie_file), dpi=130, bbox_inches="tight")
     plt.close()
 
-    # SCATTER (first two numeric columns)
+    # SCATTER 
     scatter_file = "dashboard_scatter.png"
     nums = df_plot.select_dtypes(include="number")
     plt.figure(figsize=(4, 3))
@@ -787,7 +787,7 @@ def index():
     plt.savefig(os.path.join(STATIC_DIR, scatter_file), dpi=130, bbox_inches="tight")
     plt.close()
 
-    # HEATMAP (FIXED)
+    # HEATMAP
     heatmap_file = "dashboard_heatmap.png"
     save_heatmap_png(df_plot, os.path.join(STATIC_DIR, heatmap_file), title="Correlation Heatmap", small=True)
 

@@ -148,7 +148,6 @@
 
 </div>
 
-{# ---- Plotly only if any dashboard divs exist (i.e., PNG urls missing) ---- #}
 {% if not bar_url or not line_url or not pie_url or not scatter_url or not heatmap_url %}
 <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 <script>

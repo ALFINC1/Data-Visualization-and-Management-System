@@ -4,14 +4,14 @@
 <div class="card shadow-sm border-0">
   <div class="card-body p-4">
 
-    <!-- Brand / Title -->
+    <!-- Title -->
     <div class="text-center mb-3">
       <div class="d-inline-flex align-items-center justify-content-center rounded-circle"
            style="width:52px;height:52px;background:#3f6ad8;color:#fff;">
         <i class="bi bi-bar-chart-line-fill fs-4"></i>
       </div>
 
-      <h4 class="mt-3 mb-1 fw-semibold">Sign in to DVMS</h4>
+      <h4 class="mt-3 mb-1 fw-semibold">Welcome!</h4>
       <div class="small text-muted">
         Data Visualization &amp; Management System
       </div>
@@ -72,26 +72,6 @@
       </button>
     </form>
 
-    <div class="mt-3 p-3 rounded-3" style="background:rgba(63,106,216,0.07); border:1px solid rgba(63,106,216,0.15);">
-      <div class="small text-muted mb-2">
-        <i class="bi bi-info-circle"></i> Demo credentials
-      </div>
-
-      <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-        <div class="small">
-          <span class="badge text-bg-light border">admin</span>
-          /
-          <span class="badge text-bg-light border">admin123</span>
-        </div>
-
-        <button type="button" class="btn btn-outline-primary btn-sm" id="copyDemoBtn">
-          <i class="bi bi-clipboard"></i> Copy
-        </button>
-      </div>
-
-      <div class="small text-muted mt-2">
-        Change via env variables: <code>ADMIN_USER</code> / <code>ADMIN_PASSWORD</code>
-      </div>
     </div>
 
   </div>
@@ -99,7 +79,6 @@
 
 <script>
 (function () {
-  // Toggle password visibility
   const pwd = document.getElementById("passwordInput");
   const btn = document.getElementById("togglePasswordBtn");
   const caps = document.getElementById("capsWarning");
@@ -112,7 +91,6 @@
       btn.setAttribute("aria-label", isHidden ? "Hide password" : "Show password");
     });
 
-    // Caps lock warning
     pwd.addEventListener("keyup", (e) => {
       if (!caps) return;
       const isCaps = e.getModifierState && e.getModifierState("CapsLock");
@@ -120,7 +98,6 @@
     });
   }
 
-  // Copy demo credentials (helps during presentation)
   const copyBtn = document.getElementById("copyDemoBtn");
   if (copyBtn) {
     copyBtn.addEventListener("click", async () => {
