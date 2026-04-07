@@ -12,13 +12,17 @@
     :root{
       --brand-dark:#2f4b7c;
       --brand-main:#3f6ad8;
+
       --bg:#f4f6f9;
       --surface:#ffffff;
       --surface-2:#ffffff;
       --border:rgba(0,0,0,.08);
+
       --text:#212529;
       --text-soft:#6c757d;
+
       --shadow:0 1px 3px rgba(0,0,0,.08);
+
       --topbar-h:56px;
       --sidebar-w:240px;
     }
@@ -28,55 +32,89 @@
       --surface:#151c26;
       --surface-2:#111823;
       --border:rgba(255,255,255,.10);
+
       --text:#e9eef6;
       --text-soft:rgba(233,238,246,.70);
+
       --shadow:0 2px 10px rgba(0,0,0,.35);
     }
 
-    body{ background:var(--bg); color:var(--text); margin:0; font-size:14px; overflow-x:hidden; }
+    body{
+      background:var(--bg);
+      color:var(--text);
+      margin:0;
+      font-size:14px;
+      overflow-x:hidden;
+    }
 
     /* TOPBAR */
     .dvms-topbar{
-      position:fixed; top:0; left:0; right:0;
+      position:fixed;
+      top:0; left:0; right:0;
       height:var(--topbar-h);
       z-index:1050;
       background:#212529;
-      display:flex; align-items:center;
+      display:flex;
+      align-items:center;
       transition:margin-left .25s ease;
     }
     body:not(.sidebar-collapsed) .dvms-topbar{ margin-left:var(--sidebar-w); }
 
     /* SIDEBAR (full height) */
     .dvms-sidebar{
-      position:fixed; top:0; left:0;
-      height:100vh; width:var(--sidebar-w);
+      position:fixed;
+      top:0; left:0;
+      height:100vh;
+      width:var(--sidebar-w);
       background:var(--brand-dark);
       z-index:1040;
       padding:1rem;
       overflow-y:auto;
       transition:transform .25s ease;
     }
-    body.sidebar-collapsed .dvms-sidebar{ transform:translateX(calc(-1 * var(--sidebar-w))); }
+    body.sidebar-collapsed .dvms-sidebar{
+      transform:translateX(calc(-1 * var(--sidebar-w)));
+    }
 
     .dvms-sidebar a{
-      color:#e1e5f2; text-decoration:none;
-      padding:8px 12px; border-radius:6px;
-      display:block; margin-bottom:6px;
+      color:#e1e5f2;
+      text-decoration:none;
+      padding:8px 12px;
+      border-radius:6px;
+      display:block;
+      margin-bottom:6px;
     }
-    .dvms-sidebar a.active,.dvms-sidebar a:hover{ background:var(--brand-main); color:#fff; }
+    .dvms-sidebar a.active,
+    .dvms-sidebar a:hover{
+      background:var(--brand-main);
+      color:#fff;
+    }
 
     /* MAIN */
     .dvms-main{
       padding-top:calc(var(--topbar-h) + 16px);
-      padding-left:1.5rem; padding-right:1.5rem; padding-bottom:1.5rem;
+      padding-left:1.5rem;
+      padding-right:1.5rem;
+      padding-bottom:1.5rem;
       transition:margin-left .25s ease;
       min-height:100vh;
     }
     body:not(.sidebar-collapsed) .dvms-main{ margin-left:var(--sidebar-w); }
 
     /* Cards / panels */
-    .card{ border:none; box-shadow:var(--shadow); background:var(--surface); color:var(--text); }
-    .card-header{ background:var(--surface); border-bottom:1px solid var(--border); color:var(--text-soft); font-weight:600; font-size:13px; }
+    .card{
+      border:none;
+      box-shadow:var(--shadow);
+      background:var(--surface);
+      color:var(--text);
+    }
+    .card-header{
+      background:var(--surface);
+      border-bottom:1px solid var(--border);
+      color:var(--text-soft);
+      font-weight:600;
+      font-size:13px;
+    }
 
     .filter-bar{
       background:var(--surface);
@@ -86,10 +124,13 @@
       margin-bottom:14px;
     }
     .filter-title{
-      font-size:13px; font-weight:600;
+      font-size:13px;
+      font-weight:600;
       color:var(--text-soft);
       margin-bottom:10px;
-      display:flex; align-items:center; gap:8px;
+      display:flex;
+      align-items:center;
+      gap:8px;
     }
 
     html[data-theme="dark"] .form-control,
@@ -120,6 +161,19 @@
     body:not(.sidebar-collapsed) .dvms-footer{ margin-left:var(--sidebar-w); }
     .footer-inner{ padding:14px 0; text-align:center; font-size:12px; }
 
+    /* Footer social icons */
+    .footer-icons a{
+      color:#d3d8e9;
+      margin:0 10px;
+      font-size:16px;
+      transition:color .2s ease, transform .2s ease;
+      text-decoration:none;
+    }
+    .footer-icons a:hover{
+      color:var(--brand-main);
+      transform:translateY(-2px);
+    }
+
     /* Important: on login page don't shift anything */
     body.login-page .dvms-topbar{ margin-left:0 !important; }
     body.login-page .dvms-main{ margin-left:0 !important; }
@@ -135,12 +189,14 @@
 
 <body class="{% if request.endpoint == 'login' %}login-page sidebar-collapsed{% endif %}">
 
+{# define block once, but do not render here #}
 {% if false %}{% block content %}{% endblock %}{% endif %}
 {% set is_login_page = (request.endpoint == 'login') %}
 
 <!-- TOPBAR -->
 <nav class="dvms-topbar navbar navbar-dark">
   <div class="container-fluid d-flex align-items-center justify-content-between gap-2">
+
     <div class="d-flex align-items-center gap-2">
       {% if not is_login_page %}
         <button class="btn btn-outline-light btn-sm" type="button" onclick="toggleSidebar()">
@@ -168,11 +224,13 @@
         {% endif %}
       {% endif %}
     </div>
+
   </div>
 </nav>
 
 {% if is_login_page %}
-  <!-- LOGIN: no sidebar, no filter bar -->
+
+  <!-- LOGIN: no sidebar, no filter bar, no footer -->
   <div class="login-shell">
     <div class="login-wrap">
       {% with msgs = get_flashed_messages(with_categories=true) %}
@@ -190,6 +248,7 @@
 
 {% else %}
 
+  {# Preserve ALL query params across navigation #}
   {% set qs = request.query_string.decode('utf-8') %}
   {% set q = ('?' ~ qs) if qs else '' %}
 
@@ -218,7 +277,7 @@
       {% endif %}
     {% endwith %}
 
-    <!-- ✅ RESTORED: Filters & Controls panel -->
+    <!-- Filters & Controls -->
     <div class="filter-bar">
       <div class="filter-title">
         <i class="bi bi-funnel"></i> Filters &amp; Controls
@@ -297,7 +356,6 @@
               {% endif %}
             </span>
           </div>
-
         </form>
 
         {% if role is defined and role == "admin" %}
@@ -326,7 +384,9 @@
               {% for p in presets[:8] %}
                 <a class="btn btn-outline-secondary btn-sm" href="/presets/apply/{{ p.id }}">{{ p.name }}</a>
                 {% if role is defined and role == "admin" %}
-                  <a class="btn btn-outline-danger btn-sm" href="/presets/delete/{{ p.id }}"><i class="bi bi-trash"></i></a>
+                  <a class="btn btn-outline-danger btn-sm" href="/presets/delete/{{ p.id }}">
+                    <i class="bi bi-trash"></i>
+                  </a>
                 {% endif %}
               {% endfor %}
             </div>
@@ -342,6 +402,11 @@
   <footer class="dvms-footer">
     <div class="footer-inner">
       © <span id="year"></span> Developed by Fadil Ahmed
+      <span class="footer-icons ms-2">
+        <a href="https://www.linkedin.com/in/fadilahmed123" target="_blank" aria-label="LinkedIn"><i class="bi bi-linkedin"></i></a>
+        <a href="https://github.com/ALFINC1" target="_blank" aria-label="GitHub"><i class="bi bi-github"></i></a>
+        <a href="https://t.me/ALFINC1" target="_blank" aria-label="Telegram"><i class="bi bi-telegram"></i></a>
+      </span>
     </div>
   </footer>
 
@@ -372,7 +437,8 @@ function toggleFilters(){
   p.style.display = (p.style.display === "none") ? "block" : "none";
 }
 
-document.getElementById("year") && (document.getElementById("year").textContent = new Date().getFullYear());
+const y = document.getElementById("year");
+if (y) y.textContent = new Date().getFullYear();
 
 function copyShareLink(){
   const link = "{{ share_url|default(request.url) }}";
@@ -389,22 +455,27 @@ function copyShareLink(){
     root.setAttribute("data-theme", mode);
     try { localStorage.setItem("dvms_theme", mode); } catch(e){}
     if(btn){
-      btn.innerHTML = (mode === "dark") ? '<i class="bi bi-sun"></i>' : '<i class="bi bi-moon-stars"></i>';
+      btn.innerHTML = (mode === "dark")
+        ? '<i class="bi bi-sun"></i>'
+        : '<i class="bi bi-moon-stars"></i>';
     }
   }
 
   let saved = null;
   try { saved = localStorage.getItem("dvms_theme"); } catch(e){}
-  if(saved){ setTheme(saved); }
-  else {
+  if(saved){
+    setTheme(saved);
+  } else {
     const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
     setTheme(prefersDark ? "dark" : "light");
   }
 
-  btn && btn.addEventListener("click", () => {
-    const current = root.getAttribute("data-theme") || "light";
-    setTheme(current === "dark" ? "light" : "dark");
-  });
+  if(btn){
+    btn.addEventListener("click", () => {
+      const current = root.getAttribute("data-theme") || "light";
+      setTheme(current === "dark" ? "light" : "dark");
+    });
+  }
 })();
 </script>
 
