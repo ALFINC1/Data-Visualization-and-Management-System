@@ -493,6 +493,49 @@ def account():
 
     return render_template("account.html", **ctx, title="My Account")
 
+@app.route("/account/avatar", methods=["POST"])
+def account_avatar():
+    init_db()
+    ensure_dataset_imported()
+
+    if not login_required():
+        return redirect(url_for("login"))
+
+    f = request.files.get("avatar")
+    if not f or f.filename.strip() == "":
+        flash("No image selected.", "danger")
+        return redirect(url_for("account"))
+
+    ext = os.path.splitext(f.filename)[1].lower()
+    if ext not in [".png", ".jpg", ".jpeg"]:
+        flash("Unsupported image type. Use PNG/JPG.", "danger")
+        return redirect(url_for("account"))
+
+    avatar_dir = os.path.join(STATIC_DIR, "avatars")
+    os.makedirs(avatar_dir, exist_ok=True)
+
+    filename = f"{int(time.time())}_{secure_filename(f.filename)}"
+    save_path = os.path.join(avatar_dir, filename)
+    f.save(save_path)
+
+    public_url = url_for("static", filename=f"avatars/{filename}")
+
+    conn = db()
+    try:
+        conn.execute("""
+            INSERT INTO user_profiles(username, avatar_path, updated_at)
+            VALUES(?,?,?)
+            ON CONFLICT(username) DO UPDATE SET
+                avatar_path=excluded.avatar_path,
+                updated_at=excluded.updated_at
+        """, (current_user(), public_url, int(time.time())))
+        conn.commit()
+    finally:
+        conn.close()
+
+    flash("Profile image updated.", "success")
+    return redirect(url_for("account"))
+
 # REGISTER ROUTE
 @app.route("/register", methods=["POST"])
 def register():
@@ -813,7 +856,6 @@ def api_chart(chart_type):
         else:
             return jsonify({"error": "Unknown chart type"}), 400
 
-        # ✅ CRITICAL FIX: Plotly JSON encoder (handles ndarray safely)
         return Response(fig.to_json(), mimetype="application/json")
 
     except Exception as e:
