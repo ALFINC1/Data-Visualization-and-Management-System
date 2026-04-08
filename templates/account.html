@@ -11,324 +11,363 @@
 {% set bio = info.get('bio', 'Welcome to DVMS. Update your profile info anytime.') %}
 {% set avatar_url = info.get('avatar_url', '') %}
 
-<div class="d-flex flex-wrap align-items-center justify-content-between mb-3">
-  <div>
-    <h5 class="mb-1 text-secondary">Account</h5>
-    <div class="small text-muted">Manage profile details, security, and account actions.</div>
+<style>
+  /* Scoped styles for the Figma-like Account page */
+  .acc-shell { max-width: 980px; margin: 0 auto; }
+  .acc-card { border-radius: 18px; overflow: hidden; }
+  .acc-hero {
+    height: 110px;
+    background: linear-gradient(90deg, rgba(63,106,216,0.25), rgba(255, 220, 140, 0.25));
+  }
+  .acc-body { padding: 18px; }
+  .acc-row { margin-top: -46px; padding: 0 18px 12px; }
+  .acc-avatar {
+    width: 72px; height: 72px; border-radius: 999px; object-fit: cover;
+    border: 3px solid #fff;
+    box-shadow: 0 8px 24px rgba(0,0,0,.12);
+    background: #fff;
+  }
+  .acc-avatar-fallback{
+    width:72px;height:72px;border-radius:999px;
+    display:flex;align-items:center;justify-content:center;
+    border: 3px solid #fff;
+    box-shadow: 0 8px 24px rgba(0,0,0,.12);
+    background: rgba(63,106,216,0.12);
+    color:#3f6ad8;
+  }
+
+  .acc-field label { font-size: 12px; color: rgba(0,0,0,.55); }
+  html[data-theme="dark"] .acc-field label { color: rgba(255,255,255,.65); }
+
+  .acc-input {
+    border-radius: 12px;
+    background: rgba(0,0,0,.03);
+    border: 1px solid rgba(0,0,0,.08);
+  }
+  html[data-theme="dark"] .acc-input{
+    background: rgba(255,255,255,.06);
+    border-color: rgba(255,255,255,.10);
+  }
+
+  .acc-section-title{
+    font-weight: 700;
+    font-size: 13px;
+    color: rgba(0,0,0,.65);
+  }
+  html[data-theme="dark"] .acc-section-title{ color: rgba(255,255,255,.70); }
+
+  .acc-divider { border-top: 1px solid rgba(0,0,0,.08); margin: 14px 0; }
+  html[data-theme="dark"] .acc-divider{ border-color: rgba(255,255,255,.12); }
+
+  .acc-mini { font-size: 12px; color: rgba(0,0,0,.55); }
+  html[data-theme="dark"] .acc-mini{ color: rgba(255,255,255,.65); }
+
+  .acc-pill {
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 12px;
+    border: 1px solid rgba(0,0,0,.10);
+    background: rgba(0,0,0,.02);
+  }
+  html[data-theme="dark"] .acc-pill{
+    border-color: rgba(255,255,255,.16);
+    background: rgba(255,255,255,.06);
+  }
+
+  .acc-email-box{
+    border-radius: 14px;
+    border: 1px solid rgba(0,0,0,.08);
+    padding: 12px;
+    background: rgba(0,0,0,.02);
+  }
+  html[data-theme="dark"] .acc-email-box{
+    border-color: rgba(255,255,255,.12);
+    background: rgba(255,255,255,.05);
+  }
+
+  .acc-btn { border-radius: 12px; }
+</style>
+
+<div class="acc-shell">
+
+  <div class="d-flex flex-wrap align-items-center justify-content-between mb-3">
+    <div>
+      <h5 class="mb-1 text-secondary">My Account</h5>
+      <div class="small text-muted">Profile settings, preferences, and security.</div>
+    </div>
+
+    <div class="d-flex gap-2 flex-wrap">
+      <button class="btn btn-outline-secondary btn-sm acc-btn" type="button" onclick="copyShareLink()">
+        <i class="bi bi-link-45deg"></i> Copy Link
+      </button>
+      <a class="btn btn-outline-dark btn-sm acc-btn" href="{{ url_for('logout') }}">
+        <i class="bi bi-box-arrow-right"></i> Logout
+      </a>
+    </div>
   </div>
 
-  <div class="d-flex gap-2 flex-wrap">
-    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="copyShareLink()">
-      <i class="bi bi-link-45deg"></i> Copy Link
-    </button>
-    <a class="btn btn-outline-dark btn-sm" href="/logout">
-      <i class="bi bi-box-arrow-right"></i> Logout
-    </a>
-  </div>
-</div>
+  <div class="card acc-card">
+    <div class="acc-hero"></div>
 
-<div class="row g-3">
-
-  <!-- LEFT COLUMN: PROFILE SUMMARY -->
-  <div class="col-lg-4">
-
-    <div class="card">
-      <div class="card-body">
+    <div class="acc-row">
+      <div class="d-flex align-items-center justify-content-between gap-3 flex-wrap">
         <div class="d-flex align-items-center gap-3">
+          {% if avatar_url %}
+            <img class="acc-avatar" src="{{ avatar_url }}" alt="Avatar">
+          {% else %}
+            <div class="acc-avatar-fallback">
+              <i class="bi bi-person fs-3"></i>
+            </div>
+          {% endif %}
 
-          <div class="position-relative">
-            {% if avatar_url %}
-              <img id="avatarPreviewMain"
-                   src="{{ avatar_url }}"
-                   alt="Avatar"
-                   style="width:76px;height:76px;border-radius:999px;object-fit:cover;border:2px solid rgba(63,106,216,0.25);">
-            {% else %}
-              <div id="avatarFallbackMain"
-                   class="rounded-circle d-flex align-items-center justify-content-center"
-                   style="width:76px;height:76px;background:rgba(63,106,216,0.12);color:#3f6ad8;border:2px solid rgba(63,106,216,0.25);">
-                <i class="bi bi-person fs-2"></i>
-              </div>
-              <img id="avatarPreviewMain"
-                   src=""
-                   alt="Avatar"
-                   style="display:none;width:76px;height:76px;border-radius:999px;object-fit:cover;border:2px solid rgba(63,106,216,0.25);">
-            {% endif %}
-          </div>
+          <div>
+            <div class="fw-semibold">{{ name }}</div>
+            <div class="small text-muted">{{ email }}</div>
 
-          <div class="flex-grow-1">
-            <div class="d-flex align-items-center gap-2 flex-wrap">
-              <div class="fw-semibold fs-5">{{ name }}</div>
-
-              <span class="badge {{ 'bg-danger' if role_label=='admin' else ('bg-primary' if role_label in ['user','viewer'] else 'bg-secondary') }}">
-                {{ role_label|title }}
+            <div class="d-flex gap-2 flex-wrap mt-2">
+              <span class="acc-pill">
+                <i class="bi bi-person-badge"></i> {{ user }}
               </span>
-
-              <span class="badge text-bg-light border">
+              <span class="acc-pill">
                 <i class="bi bi-shield-check"></i> {{ status }}
               </span>
-            </div>
-
-            <div class="small text-muted mt-1">
-              <i class="bi bi-envelope"></i> {{ email }}
-            </div>
-            <div class="small text-muted">
-              <i class="bi bi-geo-alt"></i> {{ address }}
+              <span class="acc-pill">
+                {% if role_label == "admin" %}
+                  <span class="badge bg-danger">Admin</span>
+                {% else %}
+                  <span class="badge bg-primary">{{ role_label|title }}</span>
+                {% endif %}
+              </span>
             </div>
           </div>
         </div>
 
-        <hr class="my-3">
-
-        <div class="small text-muted mb-1">Bio</div>
-        <div class="small">{{ bio }}</div>
-
-        <div class="mt-3 d-flex gap-2 flex-wrap">
-          <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#avatarModal">
-            <i class="bi bi-image"></i> Profile Image
+        <div class="d-flex gap-2 flex-wrap">
+          <button id="editToggleBtn" class="btn btn-primary btn-sm acc-btn" type="button">
+            <i class="bi bi-pencil-square"></i> Edit
           </button>
 
-          <button class="btn btn-primary btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#editModal">
-            <i class="bi bi-pencil-square"></i> Edit Profile
+          <button class="btn btn-outline-primary btn-sm acc-btn" type="button" data-bs-toggle="modal" data-bs-target="#avatarModal">
+            <i class="bi bi-image"></i> Avatar
           </button>
         </div>
       </div>
     </div>
 
-    <div class="card mt-3">
-      <div class="card-header">Quick Info</div>
-      <div class="card-body">
-        <div class="small mb-2"><i class="bi bi-person-badge"></i> Username: <strong>{{ user }}</strong></div>
-        <div class="small mb-2"><i class="bi bi-telephone"></i> Phone: <strong>{{ phone }}</strong></div>
-        <div class="small mb-2"><i class="bi bi-database"></i> Dataset: <strong>{{ active_data_path }}</strong></div>
-        <div class="small text-muted">
-          Tip: Role controls access. Admin can upload/reset dataset and manage presets.
-        </div>
-      </div>
-    </div>
+    <div class="acc-body">
 
-  </div>
+      <!-- Tabs -->
+      <ul class="nav nav-pills mb-3" id="accountTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active acc-btn" id="tab-profile" data-bs-toggle="pill" data-bs-target="#pane-profile" type="button" role="tab">
+            <i class="bi bi-person-gear"></i> Profile
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link acc-btn" id="tab-security" data-bs-toggle="pill" data-bs-target="#pane-security" type="button" role="tab">
+            <i class="bi bi-shield-lock"></i> Security
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link acc-btn" id="tab-danger" data-bs-toggle="pill" data-bs-target="#pane-danger" type="button" role="tab">
+            <i class="bi bi-exclamation-triangle"></i> Danger
+          </button>
+        </li>
+      </ul>
 
-  <!-- RIGHT COLUMN: SETTINGS -->
-  <div class="col-lg-8">
+      <div class="tab-content">
 
-    <ul class="nav nav-pills mb-3" id="accountTabs" role="tablist">
-      <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="tab-profile" data-bs-toggle="pill" data-bs-target="#pane-profile" type="button" role="tab">
-          <i class="bi bi-person-gear"></i> Profile
-        </button>
-      </li>
-      <li class="nav-item" role="presentation">
-        <button class="nav-link" id="tab-security" data-bs-toggle="pill" data-bs-target="#pane-security" type="button" role="tab">
-          <i class="bi bi-shield-lock"></i> Security
-        </button>
-      </li>
-      <li class="nav-item" role="presentation">
-        <button class="nav-link" id="tab-danger" data-bs-toggle="pill" data-bs-target="#pane-danger" type="button" role="tab">
-          <i class="bi bi-exclamation-triangle"></i> Danger Zone
-        </button>
-      </li>
-    </ul>
+        <!-- ===================== PROFILE TAB ===================== -->
+        <div class="tab-pane fade show active" id="pane-profile" role="tabpanel" aria-labelledby="tab-profile">
 
-    <div class="tab-content">
+          <div class="acc-section-title mb-2">Personal Information</div>
 
-      <!-- PROFILE SETTINGS -->
-      <div class="tab-pane fade show active" id="pane-profile" role="tabpanel" aria-labelledby="tab-profile">
-        <div class="card">
-          <div class="card-header">Profile Settings</div>
-          <div class="card-body">
-
-            <div class="alert alert-light border py-2 mb-3">
-              <i class="bi bi-info-circle"></i>
-              Use <strong>Edit Profile</strong> to update name, email, phone, address, and bio.
+          <form id="profileForm" method="post" action="{{ url_for('account_update') }}" class="row g-3">
+            <div class="col-md-6 acc-field">
+              <label class="form-label mb-1">Full Name</label>
+              <input class="form-control acc-input" name="name" value="{{ name }}" data-editable="1" readonly required>
             </div>
 
-            <div class="row g-3">
-              <div class="col-md-6">
-                <label class="form-label small text-muted">Full Name</label>
-                <input class="form-control" value="{{ name }}" disabled>
-              </div>
-
-              <div class="col-md-6">
-                <label class="form-label small text-muted">Email</label>
-                <input class="form-control" value="{{ email }}" disabled>
-              </div>
-
-              <div class="col-md-6">
-                <label class="form-label small text-muted">Phone</label>
-                <input class="form-control" value="{{ phone }}" disabled>
-              </div>
-
-              <div class="col-md-6">
-                <label class="form-label small text-muted">Address</label>
-                <input class="form-control" value="{{ address }}" disabled>
-              </div>
+            <div class="col-md-6 acc-field">
+              <label class="form-label mb-1">Nick Name <span class="acc-mini">(saved locally)</span></label>
+              <input class="form-control acc-input" id="nickName" value="" data-local="nickname" readonly>
             </div>
 
-            <hr class="my-3">
-
-            <div class="d-flex gap-2 flex-wrap">
-              <button class="btn btn-primary btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#editModal">
-                <i class="bi bi-pencil-square"></i> Edit Profile
-              </button>
-              <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#avatarModal">
-                <i class="bi bi-image"></i> Change Avatar
-              </button>
+            <div class="col-md-6 acc-field">
+              <label class="form-label mb-1">Email</label>
+              <input class="form-control acc-input" name="email" type="email" value="{{ email }}" data-editable="1" readonly required>
             </div>
 
-          </div>
-        </div>
-      </div>
-
-      <!-- SECURITY -->
-      <div class="tab-pane fade" id="pane-security" role="tabpanel" aria-labelledby="tab-security">
-        <div class="card">
-          <div class="card-header">Security</div>
-          <div class="card-body">
-
-            <div class="alert alert-info py-2">
-              <i class="bi bi-shield-lock"></i>
-              Change your password regularly and keep it strong.
+            <div class="col-md-6 acc-field">
+              <label class="form-label mb-1">Phone</label>
+              <input class="form-control acc-input" name="phone" value="{{ phone }}" data-editable="1" readonly>
             </div>
 
-            <form method="post" action="/account/password" class="row g-3 mt-1">
-
-              <div class="col-md-6">
-                <label class="form-label small text-muted">Current Password</label>
-                <div class="input-group">
-                  <input class="form-control" type="password" name="current_password" id="pwCurrent" required>
-                  <button class="btn btn-outline-secondary" type="button" onclick="togglePw('pwCurrent', this)">
-                    <i class="bi bi-eye"></i>
-                  </button>
-                </div>
-              </div>
-
-              <div class="col-md-6">
-                <label class="form-label small text-muted">New Password</label>
-                <div class="input-group">
-                  <input class="form-control" type="password" name="new_password" id="pwNew" required minlength="6">
-                  <button class="btn btn-outline-secondary" type="button" onclick="togglePw('pwNew', this)">
-                    <i class="bi bi-eye"></i>
-                  </button>
-                </div>
-                <div class="form-text">Minimum 6 characters.</div>
-
-                <div class="progress mt-2" style="height:6px;">
-                  <div id="pwStrengthBar" class="progress-bar" role="progressbar" style="width:0%"></div>
-                </div>
-                <div id="pwStrengthText" class="small text-muted mt-1">Strength: —</div>
-              </div>
-
-              <div class="col-md-6">
-                <label class="form-label small text-muted">Confirm New Password</label>
-                <div class="input-group">
-                  <input class="form-control" type="password" name="confirm_new_password" id="pwConfirm" required minlength="6">
-                  <button class="btn btn-outline-secondary" type="button" onclick="togglePw('pwConfirm', this)">
-                    <i class="bi bi-eye"></i>
-                  </button>
-                </div>
-              </div>
-
-              <div class="col-12">
-                <button class="btn btn-primary btn-sm" type="submit">
-                  <i class="bi bi-key"></i> Update Password
-                </button>
-              </div>
-            </form>
-
-          </div>
-        </div>
-      </div>
-
-      <!-- DANGER ZONE -->
-      <div class="tab-pane fade" id="pane-danger" role="tabpanel" aria-labelledby="tab-danger">
-        <div class="card border border-danger">
-          <div class="card-header text-danger">Danger Zone</div>
-          <div class="card-body">
-            <div class="small text-muted mb-2">
-              These actions are irreversible. Proceed with caution.
+            <div class="col-md-6 acc-field">
+              <label class="form-label mb-1">Gender <span class="acc-mini">(saved locally)</span></label>
+              <select class="form-select acc-input" id="gender" data-local="gender" disabled>
+                <option value="">Select</option>
+                <option>Female</option>
+                <option>Male</option>
+                <option>Prefer not to say</option>
+              </select>
             </div>
 
-            {% if role_label == "admin" %}
-              <div class="alert alert-warning py-2">
-                <i class="bi bi-exclamation-triangle"></i>
-                Admin account cannot be deleted from UI.
-              </div>
-            {% endif %}
-
-            <div class="d-flex gap-2 flex-wrap">
-              <a class="btn btn-outline-danger btn-sm" href="/logout">
-                <i class="bi bi-box-arrow-right"></i> Logout
-              </a>
-
-              <button class="btn btn-danger btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#deleteModal"
-                      {% if role_label == "admin" %}disabled{% endif %}>
-                <i class="bi bi-trash"></i> Delete My Account
-              </button>
+            <div class="col-md-6 acc-field">
+              <label class="form-label mb-1">Country <span class="acc-mini">(saved locally)</span></label>
+              <input class="form-control acc-input" id="country" value="" data-local="country" readonly>
             </div>
 
-          </div>
-        </div>
-      </div>
-
-    </div><!-- tab content -->
-
-  </div><!-- right col -->
-
-</div><!-- row -->
-
-<!-- ===================== EDIT PROFILE MODAL ===================== -->
-<div class="modal fade" id="editModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h6 class="modal-title"><i class="bi bi-pencil-square"></i> Edit Profile</h6>
-        <button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-
-      <form method="post" action="/account/update">
-        <div class="modal-body">
-          <div class="row g-3">
-            <div class="col-md-6">
-              <label class="form-label small text-muted">Full Name</label>
-              <input class="form-control" name="name" value="{{ name }}" required>
+            <div class="col-md-6 acc-field">
+              <label class="form-label mb-1">Language <span class="acc-mini">(saved locally)</span></label>
+              <select class="form-select acc-input" id="language" data-local="language" disabled>
+                <option value="">Select</option>
+                <option>English</option>
+                <option>Afaan Oromo</option>
+                <option>Amharic</option>
+              </select>
             </div>
 
-            <div class="col-md-6">
-              <label class="form-label small text-muted">Email</label>
-              <input class="form-control" name="email" type="email" value="{{ email }}" required>
+            <div class="col-md-6 acc-field">
+              <label class="form-label mb-1">Time Zone <span class="acc-mini">(saved locally)</span></label>
+              <select class="form-select acc-input" id="timezone" data-local="timezone" disabled>
+                <option value="">Select</option>
+                <option value="Africa/Addis_Ababa">Africa/Addis_Ababa</option>
+                <option value="UTC">UTC</option>
+              </select>
             </div>
 
-            <div class="col-md-6">
-              <label class="form-label small text-muted">Phone</label>
-              <input class="form-control" name="phone" value="{{ phone }}">
+            <div class="col-12 acc-field">
+              <label class="form-label mb-1">Address</label>
+              <input class="form-control acc-input" name="address" value="{{ address }}" data-editable="1" readonly>
             </div>
 
-            <div class="col-md-6">
-              <label class="form-label small text-muted">Address</label>
-              <input class="form-control" name="address" value="{{ address }}">
+            <div class="col-12 acc-field">
+              <label class="form-label mb-1">Bio</label>
+              <textarea class="form-control acc-input" name="bio" rows="3" data-editable="1" readonly>{{ bio }}</textarea>
             </div>
 
             <div class="col-12">
-              <label class="form-label small text-muted">Bio / About</label>
-              <textarea class="form-control" name="bio" rows="3">{{ bio }}</textarea>
+              <div class="acc-divider"></div>
+
+              <div class="acc-section-title mb-2">My email address</div>
+              <div class="acc-email-box">
+                <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                  <div class="small">
+                    <i class="bi bi-envelope"></i>
+                    <strong>{{ email }}</strong>
+                    <div class="acc-mini mt-1">Primary email (saved in database)</div>
+                  </div>
+                  <button class="btn btn-outline-secondary btn-sm acc-btn" type="button" data-bs-toggle="modal" data-bs-target="#addEmailModal">
+                    <i class="bi bi-plus-circle"></i> Add Email (local)
+                  </button>
+                </div>
+
+                <div id="extraEmails" class="mt-2 small"></div>
+              </div>
             </div>
-          </div>
 
-          <div class="small text-muted mt-3">
-            Changes are saved to <code>user_profiles</code> table (non-breaking, no change to users table).
-          </div>
+            <div class="col-12 d-flex gap-2 flex-wrap">
+              <button id="saveProfileBtn" class="btn btn-primary btn-sm acc-btn" type="submit" disabled>
+                <i class="bi bi-check2-circle"></i> Save Changes
+              </button>
+              <button id="cancelEditBtn" class="btn btn-outline-secondary btn-sm acc-btn" type="button" disabled>
+                Cancel
+              </button>
+              <span class="acc-mini d-flex align-items-center">
+                Saved fields: name, email, phone, address, bio, avatar.
+              </span>
+            </div>
+          </form>
+
         </div>
 
-        <div class="modal-footer">
-          <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-dismiss="modal">Cancel</button>
-          <button class="btn btn-primary btn-sm" type="submit">
-            <i class="bi bi-check2-circle"></i> Save Changes
-          </button>
+        <!-- ===================== SECURITY TAB ===================== -->
+        <div class="tab-pane fade" id="pane-security" role="tabpanel" aria-labelledby="tab-security">
+
+          <div class="acc-section-title mb-2">Security</div>
+          <div class="alert alert-info py-2">
+            <i class="bi bi-shield-lock"></i> Change your password regularly and keep it strong.
+          </div>
+
+          <form method="post" action="{{ url_for('account_password') }}" class="row g-3">
+            <div class="col-md-6 acc-field">
+              <label class="form-label mb-1">Current Password</label>
+              <div class="input-group">
+                <input class="form-control acc-input" type="password" name="current_password" id="pwCurrent" required>
+                <button class="btn btn-outline-secondary acc-btn" type="button" onclick="togglePw('pwCurrent', this)">
+                  <i class="bi bi-eye"></i>
+                </button>
+              </div>
+            </div>
+
+            <div class="col-md-6 acc-field">
+              <label class="form-label mb-1">New Password</label>
+              <div class="input-group">
+                <input class="form-control acc-input" type="password" name="new_password" id="pwNew" required minlength="6">
+                <button class="btn btn-outline-secondary acc-btn" type="button" onclick="togglePw('pwNew', this)">
+                  <i class="bi bi-eye"></i>
+                </button>
+              </div>
+
+              <div class="progress mt-2" style="height:6px;">
+                <div id="pwStrengthBar" class="progress-bar" style="width:0%"></div>
+              </div>
+              <div id="pwStrengthText" class="acc-mini mt-1">Strength: —</div>
+            </div>
+
+            <div class="col-md-6 acc-field">
+              <label class="form-label mb-1">Confirm New Password</label>
+              <div class="input-group">
+                <input class="form-control acc-input" type="password" name="confirm_new_password" id="pwConfirm" required minlength="6">
+                <button class="btn btn-outline-secondary acc-btn" type="button" onclick="togglePw('pwConfirm', this)">
+                  <i class="bi bi-eye"></i>
+                </button>
+              </div>
+            </div>
+
+            <div class="col-12">
+              <button class="btn btn-primary btn-sm acc-btn" type="submit">
+                <i class="bi bi-key"></i> Update Password
+              </button>
+            </div>
+          </form>
+
         </div>
-      </form>
-    </div>
-  </div>
-</div>
+
+        <!-- ===================== DANGER TAB ===================== -->
+        <div class="tab-pane fade" id="pane-danger" role="tabpanel" aria-labelledby="tab-danger">
+
+          <div class="acc-section-title mb-2 text-danger">Danger Zone</div>
+
+          {% if role_label == "admin" %}
+            <div class="alert alert-warning py-2">
+              <i class="bi bi-exclamation-triangle"></i> Admin account cannot be deleted from UI.
+            </div>
+          {% else %}
+            <div class="alert alert-danger py-2">
+              <i class="bi bi-exclamation-triangle"></i> Deleting your account is permanent and cannot be undone.
+            </div>
+          {% endif %}
+
+          <div class="d-flex gap-2 flex-wrap">
+            <a class="btn btn-outline-dark btn-sm acc-btn" href="{{ url_for('logout') }}">
+              <i class="bi bi-box-arrow-right"></i> Logout
+            </a>
+
+            <button class="btn btn-danger btn-sm acc-btn" type="button" data-bs-toggle="modal" data-bs-target="#deleteModal"
+                    {% if role_label == "admin" %}disabled{% endif %}>
+              <i class="bi bi-trash"></i> Delete My Account
+            </button>
+          </div>
+
+        </div>
+
+      </div><!-- tab-content -->
+    </div><!-- acc-body -->
+  </div><!-- card -->
+
+</div><!-- shell -->
 
 <!-- ===================== AVATAR MODAL ===================== -->
 <div class="modal fade" id="avatarModal" tabindex="-1" aria-hidden="true">
@@ -339,31 +378,50 @@
         <button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
 
-      <form method="post" action="/account/avatar" enctype="multipart/form-data">
+      <form method="post" action="{{ url_for('account_avatar') }}" enctype="multipart/form-data">
         <div class="modal-body">
-          <div class="mb-2 small text-muted">Choose JPG/PNG (recommended square). Preview below:</div>
-
-          <input class="form-control" type="file" name="avatar" id="avatarInput"
-                 accept=".png,.jpg,.jpeg" required>
+          <div class="small text-muted mb-2">Choose JPG/PNG image (recommended square). Preview below:</div>
+          <input class="form-control" type="file" name="avatar" id="avatarInput" accept=".png,.jpg,.jpeg" required>
 
           <div class="mt-3 text-center">
-            <img id="avatarPreviewModal"
-                 src="{{ avatar_url }}"
-                 alt="Preview"
-                 style="width:96px;height:96px;border-radius:999px;object-fit:cover;border:2px solid rgba(63,106,216,0.25);{% if not avatar_url %}display:none;{% endif %}">
-            <div id="avatarPreviewHint" class="small text-muted mt-2" {% if avatar_url %}style="display:none;"{% endif %}>
-              Preview will appear here after selecting a file.
-            </div>
+            <img id="avatarPreviewModal" src="" alt="Preview"
+                 style="display:none;width:110px;height:110px;border-radius:999px;object-fit:cover;border:2px solid rgba(63,106,216,0.25);">
+            <div id="avatarPreviewHint" class="small text-muted mt-2">Preview will appear after selecting a file.</div>
           </div>
         </div>
 
         <div class="modal-footer">
-          <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-dismiss="modal">Cancel</button>
-          <button class="btn btn-primary btn-sm" type="submit">
+          <button class="btn btn-outline-secondary btn-sm acc-btn" type="button" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-primary btn-sm acc-btn" type="submit">
             <i class="bi bi-upload"></i> Upload
           </button>
         </div>
       </form>
+
+    </div>
+  </div>
+</div>
+
+<!-- ===================== ADD EMAIL (LOCAL) MODAL ===================== -->
+<div class="modal fade" id="addEmailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title"><i class="bi bi-envelope-plus"></i> Add Email (Local)</h6>
+        <button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="small text-muted mb-2">This extra email is stored in your browser only (localStorage).</div>
+        <input id="extraEmailInput" class="form-control" type="email" placeholder="example@mail.com">
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary btn-sm acc-btn" type="button" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary btn-sm acc-btn" type="button" id="saveExtraEmailBtn" data-bs-dismiss="modal">
+          <i class="bi bi-check2-circle"></i> Add
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -377,68 +435,171 @@
         <button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
 
-      <form method="post" action="/account/delete">
+      <form method="post" action="{{ url_for('account_delete') }}">
         <div class="modal-body">
-          <div class="alert alert-danger py-2 mb-2">
-            This action cannot be undone.
-          </div>
-          <div class="small text-muted">
-            Type <strong>DELETE</strong> to confirm:
-          </div>
+          <div class="alert alert-danger py-2 mb-2">This action cannot be undone.</div>
+          <div class="small text-muted">Type <strong>DELETE</strong> to confirm:</div>
           <input class="form-control mt-2" name="confirm_text" placeholder="DELETE" required>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-dismiss="modal">Cancel</button>
-          <button class="btn btn-danger btn-sm" type="submit">
+          <button class="btn btn-outline-secondary btn-sm acc-btn" type="button" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-danger btn-sm acc-btn" type="submit">
             <i class="bi bi-trash"></i> Delete Account
           </button>
         </div>
       </form>
+
     </div>
   </div>
 </div>
 
 <script>
 (function(){
-  // Tabs: open via URL hash (#security or #danger)
+  // Tabs: open by hash
   const hash = (window.location.hash || "").toLowerCase();
-  if(hash === "#security"){
-    const btn = document.getElementById("tab-security");
-    btn && btn.click();
+  if(hash === "#security"){ document.getElementById("tab-security")?.click(); }
+  if(hash === "#danger"){ document.getElementById("tab-danger")?.click(); }
+
+  // Local storage keys per user
+  const uname = "{{ user if user is defined and user else 'guest' }}";
+  const key = (k) => `dvms_account_${uname}_${k}`;
+
+  // Load local preferences
+  const setLocal = (id, k) => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    const val = localStorage.getItem(key(k));
+    if(val !== null) {
+      if(el.tagName === "SELECT") el.value = val;
+      else el.value = val;
+    }
+  };
+  setLocal("nickName", "nickname");
+  setLocal("gender", "gender");
+  setLocal("country", "country");
+  setLocal("language", "language");
+  setLocal("timezone", "timezone");
+
+  // Extra emails local
+  function renderExtraEmails(){
+    const box = document.getElementById("extraEmails");
+    if(!box) return;
+    const raw = localStorage.getItem(key("extra_emails")) || "[]";
+    let arr = [];
+    try { arr = JSON.parse(raw); } catch { arr = []; }
+
+    if(!arr.length){
+      box.innerHTML = "<div class='acc-mini'>No extra emails added.</div>";
+      return;
+    }
+
+    box.innerHTML = arr.map((e, idx) => `
+      <div class="d-flex align-items-center justify-content-between gap-2 border-top pt-2 mt-2">
+        <div><i class="bi bi-envelope"></i> ${e}</div>
+        <button class="btn btn-outline-danger btn-sm acc-btn" type="button" data-del-email="${idx}">
+          <i class="bi bi-x-circle"></i>
+        </button>
+      </div>
+    `).join("");
+
+    box.querySelectorAll("[data-del-email]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const i = parseInt(btn.getAttribute("data-del-email"), 10);
+        arr.splice(i, 1);
+        localStorage.setItem(key("extra_emails"), JSON.stringify(arr));
+        renderExtraEmails();
+      });
+    });
   }
-  if(hash === "#danger"){
-    const btn = document.getElementById("tab-danger");
-    btn && btn.click();
+  renderExtraEmails();
+
+  document.getElementById("saveExtraEmailBtn")?.addEventListener("click", () => {
+    const inp = document.getElementById("extraEmailInput");
+    if(!inp) return;
+    const val = (inp.value || "").trim();
+    if(!val) return;
+
+    const raw = localStorage.getItem(key("extra_emails")) || "[]";
+    let arr = [];
+    try { arr = JSON.parse(raw); } catch { arr = []; }
+    arr.push(val);
+    localStorage.setItem(key("extra_emails"), JSON.stringify(arr));
+    inp.value = "";
+    renderExtraEmails();
+  });
+
+  // Edit mode toggle for DB-backed fields
+  const editBtn = document.getElementById("editToggleBtn");
+  const saveBtn = document.getElementById("saveProfileBtn");
+  const cancelBtn = document.getElementById("cancelEditBtn");
+  const form = document.getElementById("profileForm");
+  const editable = form ? form.querySelectorAll("[data-editable='1']") : [];
+
+  let editing = false;
+  let snapshot = {};
+
+  function setEditing(on){
+    editing = on;
+    editable.forEach(el => {
+      if(on){
+        snapshot[el.name] = el.value;
+        el.removeAttribute("readonly");
+      } else {
+        el.setAttribute("readonly", "readonly");
+      }
+    });
+
+    // local prefs enable/disable
+    document.getElementById("gender")?.toggleAttribute("disabled", !on);
+    document.getElementById("language")?.toggleAttribute("disabled", !on);
+    document.getElementById("timezone")?.toggleAttribute("disabled", !on);
+    document.getElementById("nickName")?.toggleAttribute("readonly", !on);
+    document.getElementById("country")?.toggleAttribute("readonly", !on);
+
+    saveBtn && (saveBtn.disabled = !on);
+    cancelBtn && (cancelBtn.disabled = !on);
+    if(editBtn){
+      editBtn.innerHTML = on
+        ? '<i class="bi bi-x-circle"></i> Editing'
+        : '<i class="bi bi-pencil-square"></i> Edit';
+      editBtn.classList.toggle("btn-outline-secondary", on);
+      editBtn.classList.toggle("btn-primary", !on);
+    }
   }
+
+  editBtn?.addEventListener("click", () => setEditing(!editing));
+
+  cancelBtn?.addEventListener("click", () => {
+    // restore snapshot for DB-backed fields
+    editable.forEach(el => { if(snapshot[el.name] !== undefined) el.value = snapshot[el.name]; });
+    setEditing(false);
+  });
+
+  // Save local prefs any time they change (even if you don't submit form)
+  const saveLocal = (id, k) => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    const handler = () => localStorage.setItem(key(k), el.value || "");
+    el.addEventListener("input", handler);
+    el.addEventListener("change", handler);
+  };
+  saveLocal("nickName", "nickname");
+  saveLocal("gender", "gender");
+  saveLocal("country", "country");
+  saveLocal("language", "language");
+  saveLocal("timezone", "timezone");
 
   // Avatar preview
   const input = document.getElementById("avatarInput");
-  const prevModal = document.getElementById("avatarPreviewModal");
-  const hint = document.getElementById("avatarPreviewHint");
-  const prevMain = document.getElementById("avatarPreviewMain");
-  const fallbackMain = document.getElementById("avatarFallbackMain");
-
+  const prevM = document.getElementById("avatarPreviewModal");
+  const hintM = document.getElementById("avatarPreviewHint");
   if(input){
-    input.addEventListener("change", function(){
+    input.addEventListener("change", () => {
       const file = input.files && input.files[0];
       if(!file) return;
-
       const url = URL.createObjectURL(file);
-
-      if(prevModal){
-        prevModal.src = url;
-        prevModal.style.display = "inline-block";
-      }
-      if(hint) hint.style.display = "none";
-
-      // Also update main preview immediately (nice UX)
-      if(prevMain){
-        prevMain.src = url;
-        prevMain.style.display = "inline-block";
-      }
-      if(fallbackMain){
-        fallbackMain.style.display = "none";
-      }
+      if(prevM){ prevM.src = url; prevM.style.display = "inline-block"; }
+      if(hintM){ hintM.style.display = "none"; }
     });
   }
 
@@ -446,9 +607,9 @@
   window.togglePw = function(id, btn){
     const el = document.getElementById(id);
     if(!el || !btn) return;
-    const isHidden = el.type === "password";
-    el.type = isHidden ? "text" : "password";
-    btn.innerHTML = isHidden ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
+    const hidden = el.type === "password";
+    el.type = hidden ? "text" : "password";
+    btn.innerHTML = hidden ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
   };
 
   // Password strength
@@ -456,36 +617,32 @@
   const bar = document.getElementById("pwStrengthBar");
   const txt = document.getElementById("pwStrengthText");
 
-  function strengthScore(pw){
+  function score(pw){
     let s = 0;
     if(!pw) return 0;
-    if(pw.length >= 6) s += 1;
-    if(pw.length >= 10) s += 1;
-    if(/[A-Z]/.test(pw)) s += 1;
-    if(/[0-9]/.test(pw)) s += 1;
-    if(/[^A-Za-z0-9]/.test(pw)) s += 1;
-    return s; // 0-5
+    if(pw.length >= 6) s++;
+    if(pw.length >= 10) s++;
+    if(/[A-Z]/.test(pw)) s++;
+    if(/[0-9]/.test(pw)) s++;
+    if(/[^A-Za-z0-9]/.test(pw)) s++;
+    return s;
   }
-
   function updateStrength(){
     if(!pwNew || !bar || !txt) return;
-    const s = strengthScore(pwNew.value);
+    const s = score(pwNew.value);
     const pct = (s/5)*100;
-
     bar.style.width = pct + "%";
     bar.className = "progress-bar";
-
     let label = "—";
     if(s <= 1){ bar.classList.add("bg-danger"); label = "Weak"; }
     else if(s === 2){ bar.classList.add("bg-warning"); label = "Fair"; }
     else if(s === 3){ bar.classList.add("bg-info"); label = "Good"; }
     else { bar.classList.add("bg-success"); label = "Strong"; }
-
     txt.textContent = "Strength: " + label;
   }
-
-  pwNew && pwNew.addEventListener("input", updateStrength);
+  pwNew?.addEventListener("input", updateStrength);
   updateStrength();
+
 })();
 </script>
 

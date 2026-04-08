@@ -105,6 +105,21 @@ def init_db():
                 v TEXT NOT NULL
             )
         """)
+
+        # ✅ Added: user_profiles table (required for account update/avatar/password features)
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS user_profiles(
+                username TEXT PRIMARY KEY,
+                name TEXT,
+                email TEXT,
+                phone TEXT,
+                address TEXT,
+                bio TEXT,
+                avatar_path TEXT,
+                updated_at INTEGER
+            )
+        """)
+
         connection.commit()
 
         # Ensure admin exists
@@ -479,19 +494,117 @@ def account():
     username = current_user() or "Guest"
     role = current_role() or "viewer"
 
+    # Defaults
+    name = username
+    email = f"{username}@dvms.local"
+    phone = "+251 9XX XXX XXX"
+    address = "Addis Ababa, Ethiopia"
+    bio = "DVMS user profile (default values). Update later when you add DB fields."
+    avatar_url = ""
+
+    conn = db()
+    try:
+        prof = conn.execute("SELECT * FROM user_profiles WHERE username=?", (username,)).fetchone()
+        if prof:
+            name = prof["name"] or name
+            email = prof["email"] or email
+            phone = prof["phone"] or phone
+            address = prof["address"] or address
+            bio = prof["bio"] or bio
+            avatar_url = prof["avatar_path"] or ""
+    finally:
+        conn.close()
+
     ctx.update(
         profile_info={
-            "name": username,  
+            "name": name,
             "role": role,
-            "email": f"{username}@dvms.local",
-            "phone": "+251 9XX XXX XXX",
-            "address": "Addis Ababa, Ethiopia",
+            "email": email,
+            "phone": phone,
+            "address": address,
             "status": "Active",
-            "about": "DVMS user profile (default values). Update later when you add DB fields."
+            "bio": bio,
+            "avatar_url": avatar_url
         }
     )
 
     return render_template("account.html", **ctx, title="My Account")
+
+@app.route("/account/update", methods=["POST"])
+def account_update():
+    init_db()
+    ensure_dataset_imported()
+
+    if not login_required():
+        return redirect(url_for("login"))
+
+    username = current_user()
+
+    name = (request.form.get("name") or "").strip()
+    email = (request.form.get("email") or "").strip()
+    phone = (request.form.get("phone") or "").strip()
+    address = (request.form.get("address") or "").strip()
+    bio = (request.form.get("bio") or "").strip()
+
+    conn = db()
+    try:
+        conn.execute("""
+            INSERT INTO user_profiles(username, name, email, phone, address, bio, updated_at)
+            VALUES(?,?,?,?,?,?,?)
+            ON CONFLICT(username) DO UPDATE SET
+                name=excluded.name,
+                email=excluded.email,
+                phone=excluded.phone,
+                address=excluded.address,
+                bio=excluded.bio,
+                updated_at=excluded.updated_at
+        """, (username, name, email, phone, address, bio, int(time.time())))
+        conn.commit()
+    finally:
+        conn.close()
+
+    flash("Profile updated successfully.", "success")
+    return redirect(url_for("account"))
+
+
+@app.route("/account/password", methods=["POST"])
+def account_password():
+    init_db()
+    ensure_dataset_imported()
+
+    if not login_required():
+        return redirect(url_for("login"))
+
+    current_pw = request.form.get("current_password", "")
+    new_pw = request.form.get("new_password", "")
+    confirm_pw = request.form.get("confirm_new_password", "")
+
+    if len(new_pw) < 6:
+        flash("New password must be at least 6 characters.", "danger")
+        return redirect(url_for("account") + "#security")
+
+    if new_pw != confirm_pw:
+        flash("New passwords do not match.", "danger")
+        return redirect(url_for("account") + "#security")
+
+    conn = db()
+    try:
+        row = conn.execute("SELECT password_hash FROM users WHERE username=?", (current_user(),)).fetchone()
+        if not row or not check_password_hash(row["password_hash"], current_pw):
+            flash("Current password is incorrect.", "danger")
+            return redirect(url_for("account") + "#security")
+
+        conn.execute(
+            "UPDATE users SET password_hash=? WHERE username=?",
+            (generate_password_hash(new_pw), current_user())
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    flash("Password updated successfully.", "success")
+    return redirect(url_for("account") + "#security")
+
 
 @app.route("/account/avatar", methods=["POST"])
 def account_avatar():
@@ -536,6 +649,38 @@ def account_avatar():
     flash("Profile image updated.", "success")
     return redirect(url_for("account"))
 
+
+@app.route("/account/delete", methods=["POST"])
+def account_delete():
+    init_db()
+    ensure_dataset_imported()
+
+    if not login_required():
+        return redirect(url_for("login"))
+
+    if current_role() == "admin":
+        flash("Admin account cannot be deleted from UI.", "danger")
+        return redirect(url_for("account") + "#danger")
+
+    confirm = (request.form.get("confirm_text") or "").strip().upper()
+    if confirm != "DELETE":
+        flash("Type DELETE to confirm.", "danger")
+        return redirect(url_for("account") + "#danger")
+
+    username = current_user()
+
+    conn = db()
+    try:
+        conn.execute("DELETE FROM user_profiles WHERE username=?", (username,))
+        conn.execute("DELETE FROM users WHERE username=?", (username,))
+        conn.commit()
+    finally:
+        conn.close()
+
+    session.clear()
+    flash("Account deleted.", "info")
+    return redirect(url_for("login"))
+
 # REGISTER ROUTE
 @app.route("/register", methods=["POST"])
 def register():
@@ -563,7 +708,7 @@ def register():
         flash("Passwords do not match.", "danger")
         return redirect(url_for("login") + "#register")
 
-    role = "viewer"  
+    role = "viewer"
 
     connection = db()
     try:
