@@ -60,7 +60,7 @@
     }
     body:not(.sidebar-collapsed) .dvms-topbar{ margin-left:var(--sidebar-w); }
 
-    /* SIDEBAR (full height) */
+    /* SIDEBAR */
     .dvms-sidebar{
       position:fixed;
       top:0; left:0;
@@ -101,7 +101,7 @@
     }
     body:not(.sidebar-collapsed) .dvms-main{ margin-left:var(--sidebar-w); }
 
-    /* Cards / panels */
+    /* Cards */
     .card{
       border:none;
       box-shadow:var(--shadow);
@@ -161,10 +161,10 @@
     body:not(.sidebar-collapsed) .dvms-footer{ margin-left:var(--sidebar-w); }
     .footer-inner{ padding:14px 0; text-align:center; font-size:12px; }
 
-    /* Footer social icons */
+    /* Footer icons */
     .footer-icons a{
       color:#d3d8e9;
-      margin:0 10px;
+      margin:0 8px;
       font-size:16px;
       transition:color .2s ease, transform .2s ease;
       text-decoration:none;
@@ -174,7 +174,6 @@
       transform:translateY(-2px);
     }
 
-    /* Important: on login page don't shift anything */
     body.login-page .dvms-topbar{ margin-left:0 !important; }
     body.login-page .dvms-main{ margin-left:0 !important; }
 
@@ -193,7 +192,6 @@
 {% if false %}{% block content %}{% endblock %}{% endif %}
 {% set is_login_page = (request.endpoint == 'login') %}
 
-<!-- TOPBAR -->
 <nav class="dvms-topbar navbar navbar-dark">
   <div class="container-fluid d-flex align-items-center justify-content-between gap-2">
 
@@ -230,7 +228,6 @@
 
 {% if is_login_page %}
 
-  <!-- LOGIN: no sidebar, no filter bar, no footer -->
   <div class="login-shell">
     <div class="login-wrap">
       {% with msgs = get_flashed_messages(with_categories=true) %}
@@ -252,7 +249,6 @@
   {% set qs = request.query_string.decode('utf-8') %}
   {% set q = ('?' ~ qs) if qs else '' %}
 
-  <!-- SIDEBAR -->
   <aside class="dvms-sidebar">
     <a href="/{{ q }}" class="{% if request.path == '/' %}active{% endif %}">Dashboard</a>
     <a href="/bar{{ q }}" class="{% if request.path.startswith('/bar') %}active{% endif %}">Bar Chart</a>
@@ -264,7 +260,6 @@
     <a href="/profile{{ q }}" class="{% if request.path.startswith('/profile') %}active{% endif %}">Profile</a>
   </aside>
 
-  <!-- MAIN -->
   <main class="dvms-main">
 
     {% with msgs = get_flashed_messages(with_categories=true) %}
@@ -277,7 +272,6 @@
       {% endif %}
     {% endwith %}
 
-    <!-- Filters & Controls -->
     <div class="filter-bar">
       <div class="filter-title">
         <i class="bi bi-funnel"></i> Filters &amp; Controls
@@ -287,7 +281,6 @@
       <div id="filtersPanel">
         <form class="row g-2 align-items-end" method="get" action="{{ request.path }}">
 
-          <!-- Preserve table controls when filtering -->
           {% if request.args.get('search') %}<input type="hidden" name="search" value="{{ request.args.get('search') }}">{% endif %}
           {% if request.args.get('sort') %}<input type="hidden" name="sort" value="{{ request.args.get('sort') }}">{% endif %}
           {% if request.args.get('order') %}<input type="hidden" name="order" value="{{ request.args.get('order') }}">{% endif %}
@@ -401,7 +394,7 @@
 
   <footer class="dvms-footer">
     <div class="footer-inner">
-      © <span id="year"></span> Developed by Fadil Ahmed
+      © <span id="year"></span> by Fadil Ahmed
       <span class="footer-icons ms-2">
         <a href="https://www.linkedin.com/in/fadilahmed123" target="_blank" aria-label="LinkedIn"><i class="bi bi-linkedin"></i></a>
         <a href="https://github.com/ALFINC1" target="_blank" aria-label="GitHub"><i class="bi bi-github"></i></a>

@@ -88,7 +88,6 @@ class DataService:
 
         for enc in encodings:
             try:
-                # Try delimiter sniffing from a sample
                 sep = self._sniff_csv_delimiter(path, encoding=enc)
 
                 return pd.read_csv(

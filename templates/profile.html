@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
 
-{# ---------------- Derived metrics (template-only) ---------------- #}
 {% set total_missing = 0 %}
 {% for k, v in missing.items() %}
   {% set total_missing = total_missing + v %}
@@ -53,7 +52,6 @@
   </div>
 </div>
 
-<!-- ✅ User info card (Admin/User shown clearly) -->
 <div class="card mb-3">
   <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-2">
     <div>
@@ -128,7 +126,7 @@
   <div class="accordion-item">
     <h2 class="accordion-header" id="headingMissing">
       <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseMissing" aria-expanded="true" aria-controls="collapseMissing">
-        Missing Values (per column)
+        Missing Values per column
       </button>
     </h2>
     <div id="collapseMissing" class="accordion-collapse collapse show" aria-labelledby="headingMissing" data-bs-parent="#profileAccordion">
@@ -172,7 +170,7 @@
   <div class="accordion-item">
     <h2 class="accordion-header" id="headingOutliers">
       <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOutliers" aria-expanded="false" aria-controls="collapseOutliers">
-        Outliers (IQR method)
+        Outliers
       </button>
     </h2>
     <div id="collapseOutliers" class="accordion-collapse collapse" aria-labelledby="headingOutliers" data-bs-parent="#profileAccordion">
@@ -216,7 +214,7 @@
   <div class="accordion-item">
     <h2 class="accordion-header" id="headingTypes">
       <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTypes" aria-expanded="false" aria-controls="collapseTypes">
-        Column Types (dtype summary)
+        Column Data Types
       </button>
     </h2>
     <div id="collapseTypes" class="accordion-collapse collapse" aria-labelledby="headingTypes" data-bs-parent="#profileAccordion">
@@ -260,17 +258,15 @@
   <div class="accordion-item">
     <h2 class="accordion-header" id="headingHist">
       <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseHist" aria-expanded="false" aria-controls="collapseHist">
-        Distribution (Histogram)
+        Distribution by Histogram
       </button>
     </h2>
     <div id="collapseHist" class="accordion-collapse collapse" aria-labelledby="headingHist" data-bs-parent="#profileAccordion">
       <div class="accordion-body">
 
-        <!-- ✅ FIX: action explicitly points to /profile (prevents redirect to dashboard) -->
         <form method="get" action="{{ url_for('profile') }}" class="row g-2 mb-2">
           <input type="hidden" name="open" value="hist">
 
-          <!-- Optional: preserve filters if you ever want them -->
           <input type="hidden" name="category" value="{{ request.args.get('category','') }}">
           <input type="hidden" name="date" value="{{ request.args.get('date','') }}">
           <input type="hidden" name="min" value="{{ request.args.get('min','') }}">
@@ -303,13 +299,12 @@
 
 </div>
 
-<!-- ✅ Plotly script required for histogram -->
 <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 
 <script>
 (function () {
 
-  // Table search helper
+  // Table search 
   function bindSearch(inputId, tableId) {
     const input = document.getElementById(inputId);
     const table = document.getElementById(tableId);
@@ -329,7 +324,6 @@
   bindSearch("outlierSearch", "outlierTable");
   bindSearch("dtypeSearch", "dtypeTable");
 
-  // Render histogram
   const target = document.getElementById("histDiv");
 
   {% if hist_json %}
@@ -339,19 +333,17 @@
     if (target) target.innerHTML = "<div class='alert alert-warning mb-0'>No numeric column available.</div>";
   {% endif %}
 
-  // ✅ Auto-open histogram section after clicking View
   const open = "{{ open_section }}";
   if (open === "hist") {
     const el = document.getElementById("collapseHist");
     if (el) {
       const bs = bootstrap.Collapse.getOrCreateInstance(el, {toggle:false});
       bs.show();
-      // scroll into view (nice UX)
       setTimeout(() => el.scrollIntoView({behavior:"smooth", block:"start"}), 200);
     }
   }
 
-})();
+});
 </script>
 
 {% endblock %}

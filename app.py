@@ -16,8 +16,9 @@ import plotly.express as px
 
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    flash, session, Response, send_file, has_request_context
+    flash, session, Response, send_file, has_request_context, jsonify
 )
+
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -32,7 +33,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
-# CONFIG 
+# CONFIG
 DATA_PATH_DEFAULT = os.getenv("DATA_PATH", "data.xlsx")
 
 UPLOAD_DIR = "uploads"
@@ -40,8 +41,8 @@ STORAGE_DIR = "storage"
 STATIC_DIR = "static"
 
 DB_PATH = os.path.join(STORAGE_DIR, "dvms.sqlite")
-DATA_TABLE = "dvms_data"  
-META_TABLE = "dvms_meta" 
+DATA_TABLE = "dvms_data"
+META_TABLE = "dvms_meta"
 
 ALLOWED_EXTENSIONS = {".csv", ".xls", ".xlsx"}
 
@@ -49,10 +50,10 @@ ROTATION = 40
 FONT_SIZE = 7
 
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123") 
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 
 
-# DIR / DB 
+# DIR
 def init_dirs():
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     os.makedirs(STORAGE_DIR, exist_ok=True)
@@ -66,22 +67,22 @@ def db():
 
 
 def table_exists(name: str) -> bool:
-    conn = db()
+    connection = db()
     try:
-        cur = conn.execute(
+        cur = connection.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
             (name,)
         )
         return cur.fetchone() is not None
     finally:
-        conn.close()
+        connection.close()
 
 
 def init_db():
     init_dirs()
-    conn = db()
+    connection = db()
     try:
-        conn.execute("""
+        connection.execute("""
             CREATE TABLE IF NOT EXISTS users(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
@@ -89,7 +90,7 @@ def init_db():
                 role TEXT NOT NULL
             )
         """)
-        conn.execute("""
+        connection.execute("""
             CREATE TABLE IF NOT EXISTS presets(
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -98,48 +99,48 @@ def init_db():
                 owner TEXT NOT NULL
             )
         """)
-        conn.execute(f"""
+        connection.execute(f"""
             CREATE TABLE IF NOT EXISTS {META_TABLE}(
                 k TEXT PRIMARY KEY,
                 v TEXT NOT NULL
             )
         """)
-        conn.commit()
+        connection.commit()
 
         # Ensure admin exists
-        cur = conn.execute("SELECT username FROM users WHERE username=?", (ADMIN_USER,))
+        cur = connection.execute("SELECT username FROM users WHERE username=?", (ADMIN_USER,))
         if cur.fetchone() is None:
-            conn.execute(
+            connection.execute(
                 "INSERT INTO users(username, password_hash, role) VALUES(?,?,?)",
                 (ADMIN_USER, generate_password_hash(ADMIN_PASSWORD), "admin")
             )
-            conn.commit()
+            connection.commit()
             logger.info("Admin account created (change ADMIN_PASSWORD env for security).")
     finally:
-        conn.close()
+        connection.close()
 
 
-# META 
+# META
 def meta_get(key: str, default=None):
-    conn = db()
+    connection = db()
     try:
-        row = conn.execute(f"SELECT v FROM {META_TABLE} WHERE k=?", (key,)).fetchone()
+        row = connection.execute(f"SELECT v FROM {META_TABLE} WHERE k=?", (key,)).fetchone()
         return row["v"] if row else default
     finally:
-        conn.close()
+        connection.close()
 
 
 def meta_set(key: str, value: str):
-    conn = db()
+    connection = db()
     try:
-        conn.execute(
+        connection.execute(
             f"INSERT INTO {META_TABLE}(k,v) VALUES(?,?) "
             f"ON CONFLICT(k) DO UPDATE SET v=excluded.v",
             (key, str(value))
         )
-        conn.commit()
+        connection.commit()
     finally:
-        conn.close()
+        connection.close()
 
 
 # AUTH HELPERS
@@ -161,7 +162,6 @@ def admin_required():
 
 # DATASET HELPERS
 def active_data_path():
-
     if has_request_context():
         return session.get("DATA_PATH_ACTIVE", meta_get("active_dataset_path", DATA_PATH_DEFAULT))
     return meta_get("active_dataset_path", DATA_PATH_DEFAULT)
@@ -172,12 +172,12 @@ def import_to_sqlite(path: str):
     df = ds.load_df().copy()
     df.columns = [str(c).strip().replace(" ", "_") for c in df.columns]
 
-    conn = db()
+    connection = db()
     try:
-        df.to_sql(DATA_TABLE, conn, if_exists="replace", index=False)
-        conn.commit()
+        df.to_sql(DATA_TABLE, connection, if_exists="replace", index=False)
+        connection.commit()
     finally:
-        conn.close()
+        connection.close()
 
     meta_set("active_dataset_path", path)
     meta_set("imported_at", str(int(time.time())))
@@ -355,7 +355,7 @@ def compute_kpis(where_clause, params, x_col, y_col):
     }
 
 
-# FIXED HEATMAP PNG 
+# HEATMAP PNG
 def save_heatmap_png(df_any, out_path, title="Correlation Heatmap", small=True):
     plt.close("all")
 
@@ -438,7 +438,7 @@ def base_context():
     )
 
 
-# AUTH ROUTES 
+# AUTH ROUTES
 @app.route("/login", methods=["GET", "POST"])
 def login():
     init_db()
@@ -466,7 +466,7 @@ def login():
     return render_template("login.html", **base_context(), title="Login")
 
 
-# REGISTER ROUTE  (viewer/user only)
+# REGISTER ROUTE
 @app.route("/register", methods=["POST"])
 def register():
     init_db()
@@ -493,22 +493,22 @@ def register():
         flash("Passwords do not match.", "danger")
         return redirect(url_for("login") + "#register")
 
-    role = "viewer"  # Admin cannot be created from UI
+    role = "viewer"  
 
-    conn = db()
+    connection = db()
     try:
-        exists = conn.execute("SELECT username FROM users WHERE username=?", (username,)).fetchone()
+        exists = connection.execute("SELECT username FROM users WHERE username=?", (username,)).fetchone()
         if exists:
             flash("Username already exists. Try another.", "danger")
             return redirect(url_for("login") + "#register")
 
-        conn.execute(
+        connection.execute(
             "INSERT INTO users(username, password_hash, role) VALUES(?,?,?)",
             (username, generate_password_hash(password), role)
         )
-        conn.commit()
+        connection.commit()
     finally:
-        conn.close()
+        connection.close()
 
     flash("Account created successfully! You can login now.", "success")
     return redirect(url_for("login", username=username))
@@ -521,7 +521,7 @@ def logout():
     return redirect(url_for("login"))
 
 
-# UPLOAD 
+# UPLOAD
 @app.route("/upload", methods=["POST"])
 def upload_dataset():
     if not admin_required():
@@ -622,7 +622,7 @@ def preset_delete(preset_id):
     return redirect(url_for("index"))
 
 
-# EXPORT CSV 
+# EXPORT CSV
 @app.route("/export/data.csv")
 def export_csv():
     ensure_dataset_imported()
@@ -652,7 +652,7 @@ def export_csv():
                     headers={"Content-Disposition": f"attachment; filename={filename}"})
 
 
-# EXPORT PDF REPORT
+# EXPORT PDF
 @app.route("/export/report.pdf")
 def export_report_pdf():
     ensure_dataset_imported()
@@ -686,7 +686,7 @@ def export_report_pdf():
     return send_file(pdf_path, as_attachment=True, download_name=os.path.basename(pdf_path))
 
 
-# DRILL DOWN 
+# DRILL DOWN
 @app.route("/drill")
 def drill():
     category = request.args.get("category", "").strip()
@@ -702,14 +702,12 @@ def drill():
     return redirect(url_for("data", **args))
 
 
-# INTERACTIVE CHART API
-# ✅ ONLY CHANGE: FIXED route so /api/chart/bar works
 @app.route("/api/chart/<chart_type>")
 def api_chart(chart_type):
     ensure_dataset_imported()
+
     x_col, y_col = pick_columns()
     date_col = detect_date_column()
-
     where_clause, params = build_where(x_col, y_col, date_col)
 
     conn = db()
@@ -722,47 +720,81 @@ def api_chart(chart_type):
         conn.close()
 
     if df.empty:
-        return Response(json.dumps({"error": "No data"}), mimetype="application/json")
+        return jsonify({"error": "No data"}), 404
 
-    if chart_type == "bar":
-        g = df.groupby(x_col)[y_col].mean().sort_values(ascending=False).head(10).reset_index()
-        fig = px.bar(g, x=x_col, y=y_col, title="Bar Chart")
+    cols = df.columns.tolist()
 
-    elif chart_type == "line":
-        g = df.groupby(x_col)[y_col].mean().sort_values(ascending=False).head(10).reset_index()
-        fig = px.line(g, x=x_col, y=y_col, title="Line Chart")
+    # pick  x column
+    if (not x_col) or (x_col not in cols):
+        non_num = df.select_dtypes(exclude="number").columns.tolist()
+        x_col = non_num[0] if non_num else (cols[0] if cols else None)
 
-    elif chart_type == "pie":
-        g = df[x_col].astype(str).value_counts().head(10).reset_index()
-        g.columns = [x_col, "count"]
-        fig = px.pie(g, names=x_col, values="count", title="Pie Chart")
+    # pick y column (numeric)
+    if (not y_col) or (y_col not in cols) or (not pd.api.types.is_numeric_dtype(df[y_col])):
+        num_cols = df.select_dtypes(include="number").columns.tolist()
+        y_col = num_cols[0] if num_cols else None
 
-    elif chart_type == "scatter":
-        nums = df.select_dtypes(include="number")
-        if nums.shape[1] < 2:
-            return Response(json.dumps({"error": "Not enough numeric cols"}), mimetype="application/json")
-        fig = px.scatter(df, x=nums.columns[0], y=nums.columns[1], title="Scatter Plot")
+    if not x_col:
+        return jsonify({"error": "No usable columns found for charting"}), 400
 
-    elif chart_type == "heatmap":
-        nums = df.select_dtypes(include="number").dropna(axis=1, how="all")
-        if nums.shape[1] < 2:
-            return Response(json.dumps({"error": "Not enough numeric cols"}), mimetype="application/json")
-        nunique = nums.nunique(dropna=True)
-        nums = nums.loc[:, nunique > 1]
-        if nums.shape[1] < 2:
-            return Response(json.dumps({"error": "Numeric columns are constant; heatmap not possible"}), mimetype="application/json")
-        corr = nums.corr()
-        if corr.isna().all().all():
-            return Response(json.dumps({"error": "Correlation could not be computed"}), mimetype="application/json")
-        fig = px.imshow(corr, text_auto=False, title="Correlation Heatmap")
+    try:
+        if chart_type == "bar":
+            if y_col:
+                g = df.groupby(x_col, dropna=False)[y_col].mean().sort_values(ascending=False).head(10).reset_index()
+                fig = px.bar(g, x=x_col, y=y_col, title="Bar Chart (Mean)")
+            else:
+                g = df[x_col].astype(str).value_counts().head(10).reset_index()
+                g.columns = [x_col, "count"]
+                fig = px.bar(g, x=x_col, y="count", title="Bar Chart (Count)")
 
-    else:
-        return Response(json.dumps({"error": "Unknown chart type"}), mimetype="application/json")
+        elif chart_type == "line":
+            if y_col:
+                g = df.groupby(x_col, dropna=False)[y_col].mean().reset_index()
+                fig = px.line(g, x=x_col, y=y_col, title="Line Chart (Mean)")
+            else:
+                g = df[x_col].astype(str).value_counts().reset_index()
+                g.columns = [x_col, "count"]
+                fig = px.line(g, x=x_col, y="count", title="Line Chart (Count)")
 
-    return Response(fig.to_json(), mimetype="application/json")
+        elif chart_type == "pie":
+            g = df[x_col].astype(str).value_counts().head(10).reset_index()
+            g.columns = [x_col, "count"]
+            fig = px.pie(g, names=x_col, values="count", title="Pie Chart")
+
+        elif chart_type == "scatter":
+            nums = df.select_dtypes(include="number")
+            if nums.shape[1] < 2:
+                return jsonify({"error": "Not enough numeric cols for scatter"}), 400
+            fig = px.scatter(df, x=nums.columns[0], y=nums.columns[1], title="Scatter Plot")
+
+        elif chart_type == "heatmap":
+            nums = df.select_dtypes(include="number").dropna(axis=1, how="all")
+            if nums.shape[1] < 2:
+                return jsonify({"error": "Not enough numeric cols"}), 400
+
+            nunique = nums.nunique(dropna=True)
+            nums = nums.loc[:, nunique > 1]
+            if nums.shape[1] < 2:
+                return jsonify({"error": "Numeric columns are constant; heatmap not possible"}), 400
+
+            corr = nums.corr()
+            if corr.isna().all().all():
+                return jsonify({"error": "Correlation could not be computed"}), 400
+
+            fig = px.imshow(corr, text_auto=False, title="Correlation Heatmap")
+
+        else:
+            return jsonify({"error": "Unknown chart type"}), 400
+
+        # ✅ CRITICAL FIX: Plotly JSON encoder (handles ndarray safely)
+        return Response(fig.to_json(), mimetype="application/json")
+
+    except Exception as e:
+        logger.exception("Chart API failed")
+        return jsonify({"error": f"Chart generation failed: {str(e)}"}), 500
 
 
-# DASHBOARD 
+# DASHBOARD
 @app.route("/")
 def index():
     init_db()
@@ -948,7 +980,7 @@ def profile():
     return render_template("profile.html", **ctx, title="Data Profile")
 
 
-# DETAIL CHART PAGES (PNG)
+# DETAIL CHART PAGES
 @app.route("/bar")
 def bar_chart():
     if not login_required():

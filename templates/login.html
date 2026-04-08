@@ -11,11 +11,11 @@
         <i class="bi bi-bar-chart-line-fill fs-4"></i>
       </div>
 
-      <h4 class="mt-3 mb-1 fw-semibold">Welcome to DVMS</h4>
+      <h4 class="mt-3 mb-1 fw-semibold">Welcome!</h4>
       <div class="small text-muted">Data Visualization &amp; Management System</div>
     </div>
 
-    <!-- Tabs: Login / Create Account -->
+    <!-- Tabs -->
     <ul class="nav nav-pills nav-fill mb-3" id="authTabs" role="tablist">
       <li class="nav-item" role="presentation">
         <button class="nav-link active" id="login-tab" data-bs-toggle="pill" data-bs-target="#loginPane" type="button" role="tab">
@@ -31,7 +31,7 @@
 
     <div class="tab-content" id="authTabsContent">
 
-      <!-- ===================== LOGIN ===================== -->
+      <!-- LOGIN -->
       <div class="tab-pane fade show active" id="loginPane" role="tabpanel" aria-labelledby="login-tab">
         <form method="post" action="{{ url_for('login') }}" class="mt-2" autocomplete="on">
           <div class="mb-3">
@@ -91,15 +91,13 @@
         <div class="mt-3 p-3 rounded-3"
              style="background:rgba(63,106,216,0.07); border:1px solid rgba(63,106,216,0.15);">
           <div class="small text-muted">
-            <i class="bi bi-info-circle"></i> Admin accounts are created only in the database (system-managed).
           </div>
         </div>
       </div>
 
-      <!-- ===================== REGISTER (Viewer/User) ===================== -->
+      <!-- REGISTER -->
       <div class="tab-pane fade" id="registerPane" role="tabpanel" aria-labelledby="register-tab">
 
-        <!-- ✅ FIX: real form action + POST -->
         <form method="post" action="{{ url_for('register') }}" class="mt-2" autocomplete="on">
           <div class="mb-3">
             <label class="form-label">Choose Username</label>
@@ -206,7 +204,6 @@
   bindToggle("passwordInputReg", "togglePasswordBtnReg");
   bindCapsWarning("passwordConfirmReg", "capsWarningReg");
 
-  // ✅ FIX: if backend redirects to /login#register, open Register tab automatically
   if (window.location.hash === "#register") {
     const btn = document.getElementById("register-tab");
     if (btn) btn.click();
