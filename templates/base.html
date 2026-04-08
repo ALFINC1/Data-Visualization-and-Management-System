@@ -257,7 +257,12 @@
     <a href="/heatmap{{ q }}" class="{% if request.path.startswith('/heatmap') %}active{% endif %}">Heatmap</a>
     <a href="/pie{{ q }}" class="{% if request.path.startswith('/pie') %}active{% endif %}">Pie</a>
     <a href="/data{{ q }}" class="{% if request.path.startswith('/data') %}active{% endif %}">Data</a>
-    <a href="/profile{{ q }}" class="{% if request.path.startswith('/profile') %}active{% endif %}">Profile</a>
+
+    <!-- ✅ NEW: Account endpoint -->
+    <a href="/account{{ q }}" class="{% if request.path.startswith('/account') %}active{% endif %}">Account</a>
+
+    <!-- ✅ Rename to Data Profile (still /profile) -->
+    <a href="/profile{{ q }}" class="{% if request.path.startswith('/profile') %}active{% endif %}">Data Profile</a>
   </aside>
 
   <main class="dvms-main">

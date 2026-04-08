@@ -465,6 +465,33 @@ def login():
 
     return render_template("login.html", **base_context(), title="Login")
 
+# ACCOUNT PAGE
+@app.route("/account")
+def account():
+    init_db()
+    ensure_dataset_imported()
+
+    if not login_required():
+        return redirect(url_for("login"))
+
+    ctx = base_context()
+
+    username = current_user() or "Guest"
+    role = current_role() or "viewer"
+
+    ctx.update(
+        profile_info={
+            "name": username,  
+            "role": role,
+            "email": f"{username}@dvms.local",
+            "phone": "+251 9XX XXX XXX",
+            "address": "Addis Ababa, Ethiopia",
+            "status": "Active",
+            "about": "DVMS user profile (default values). Update later when you add DB fields."
+        }
+    )
+
+    return render_template("account.html", **ctx, title="My Account")
 
 # REGISTER ROUTE
 @app.route("/register", methods=["POST"])
