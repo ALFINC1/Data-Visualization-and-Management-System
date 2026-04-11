@@ -28,15 +28,14 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 from settings import DEFAULT_APP_SETTINGS, DEFAULT_USER_SETTINGS
 from service.service import DataService
-
 from datetime import timedelta
-app.permanent_session_lifetime = timedelta(days=30)
 
 
 # APP
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "dvms-dev-secret")
 app.permanent_session_lifetime = timedelta(days=30)
+
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -594,50 +593,53 @@ def login():
 
     ctx = base_context()
 
-    # GET -> show login page
-    if request.method == "GET":
-        return render_template("login.html", **ctx, title="Login")
+    ctx["open_tab"] = "login"
+    ctx["prefill_username"] = request.args.get("username", "")
 
-    # POST -> authenticate
-    username = (request.form.get("username") or "").strip()
-    password = (request.form.get("password") or "").strip()
-    remember = (request.form.get("remember") == "1")
+    if request.method == "POST":
+        username = (request.form.get("username") or "").strip()
+        password = (request.form.get("password") or "").strip()
+        remember = (request.form.get("remember") == "1")
 
-    # Basic validation
-    if not username or not password:
-        flash("Please enter username and password.", "danger")
-        return render_template("login.html", **ctx, title="Login")
+        ctx["prefill_username"] = username
 
-    # Fetch user
-    conn = db()
-    try:
-        user_row = conn.execute(
-            "SELECT username, password_hash, role FROM users WHERE username=?",
-            (username,)
-        ).fetchone()
-    finally:
-        conn.close()
+        # Missing fields
+        if not username or not password:
+            flash("Please enter username and password.", "danger")
+            return render_template("login.html", **ctx, title="Login")
 
-    # Username not found
-    if not user_row:
-        flash("Account does not exist. Please create an account.", "danger")
-        return redirect(url_for("login") + "#register")
+        # Lookup user
+        conn = db()
+        try:
+            user_row = conn.execute(
+                "SELECT username, password_hash, role FROM users WHERE username=?",
+                (username,)
+            ).fetchone()
+        finally:
+            conn.close()
 
-    # Wrong password
-    if not check_password_hash(user_row["password_hash"], password):
-        flash("Incorrect password. Please try again.", "danger")
-        return redirect(url_for("login", username=username))
+        # Account not found
+        if not user_row:
+            flash("Account does not exist. Please create an account.", "danger")
+            ctx["open_tab"] = "register"
+            return render_template("login.html", **ctx, title="Login")
 
-    # Success
-    session.clear()  
-    session["user"] = user_row["username"]
-    session["role"] = user_row["role"]
+        # Wrong password
+        if not check_password_hash(user_row["password_hash"], password):
+            flash("Incorrect password. Please try again.", "danger")
+            return render_template("login.html", **ctx, title="Login")
 
-    # Remember me
-    session.permanent = remember
+        # Success
+        session.clear()
+        session["user"] = user_row["username"]
+        session["role"] = user_row["role"]
+        session.permanent = remember
 
-    flash("Login successful. Welcome!", "success")
-    return redirect(url_for("index"))
+        flash("Login successful. Welcome!", "success")
+        return redirect(url_for("index"))
+
+    # GET
+    return render_template("login.html", **ctx, title="Login")
 
 
 @app.route("/register", methods=["POST"])

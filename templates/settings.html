@@ -232,7 +232,7 @@
 </div>
 
 <script>
-/* ===== Instant preview (theme + font + density) ===== */
+/* Instant preview */
 (function(){
   const themeSel = document.getElementById("prefTheme");
   const fontScale = document.getElementById("prefFontScale");
@@ -293,7 +293,7 @@
   }
 
   function applyAccessibilityPreview(){
-    // Reduce motion (simple)
+    // Reduce motion
     const rm = reduceMotion ? reduceMotion.value : "auto";
     const hc = highContrast ? highContrast.value : "off";
 
@@ -313,7 +313,7 @@
   reduceMotion && reduceMotion.addEventListener("change", applyAccessibilityPreview);
   highContrast && highContrast.addEventListener("change", applyAccessibilityPreview);
 
-  // initial preview from current selections
+  // initial preview 
   themeSel && applyThemePreview(themeSel.value);
   fontScale && applyFontScalePreview(fontScale.value);
   densitySel && applyDensityPreview(densitySel.value);
@@ -323,7 +323,7 @@
 </script>
 
 <style>
-/* Optional high contrast mode (simple) */
+/* Optional high contrast mode */
 body.dvms-high-contrast .card,
 body.dvms-high-contrast .filter-bar{
   border: 2px solid rgba(0,0,0,.35) !important;

@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
 
-{# ---------------- Derived metrics ---------------- #}
 {% set total_missing = 0 %}
 {% for k, v in missing.items() %}
   {% set total_missing = total_missing + v %}
@@ -54,7 +53,7 @@
   </div>
 </div>
 
-<!-- KPI Cards (Data-only) -->
+<!-- KPI Cards -->
 <div class="row g-3 mb-3">
   <div class="col-md-2">
     <div class="card">
