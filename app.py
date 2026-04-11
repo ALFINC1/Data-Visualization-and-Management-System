@@ -29,6 +29,9 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from settings import DEFAULT_APP_SETTINGS, DEFAULT_USER_SETTINGS
 from service.service import DataService
 
+from datetime import timedelta
+app.permanent_session_lifetime = timedelta(days=30)
+
 
 # APP
 app = Flask(__name__)
@@ -59,7 +62,7 @@ ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 
 
-# ---------- DIR / DB ----------
+# DIR / DB
 def init_dirs():
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     os.makedirs(STORAGE_DIR, exist_ok=True)
@@ -86,7 +89,6 @@ def table_exists(name: str) -> bool:
 
 
 def ensure_columns(conn, table_name: str, columns: dict):
-    """Safely add missing columns to an existing SQLite table."""
     existing = {r["name"] for r in conn.execute(f"PRAGMA table_info({table_name})").fetchall()}
     for col, typ in columns.items():
         if col not in existing:
@@ -94,7 +96,6 @@ def ensure_columns(conn, table_name: str, columns: dict):
 
 
 def qident(name: str) -> str:
-    """Safely quote SQLite identifiers (columns)."""
     return '"' + str(name).replace('"', '""') + '"'
 
 
@@ -128,7 +129,6 @@ def init_db():
             )
         """)
 
-        # User profiles: Option A + Option B stored together
         connection.execute("""
             CREATE TABLE IF NOT EXISTS user_profiles(
                 username TEXT PRIMARY KEY,
@@ -166,7 +166,7 @@ def init_db():
             )
         """)
 
-        # Safe migrations (if DB existed before)
+        # Safe migrations 
         ensure_columns(connection, "user_profiles", {
             "first_name": "TEXT",
             "last_name": "TEXT",
@@ -189,7 +189,7 @@ def init_db():
         connection.close()
 
 
-# ---------- META ----------
+# META
 def meta_get(key: str, default=None):
     connection = db()
     try:
@@ -212,7 +212,7 @@ def meta_set(key: str, value: str):
         connection.close()
 
 
-# ---------- SETTINGS HELPERS ----------
+#  SETTINGS HELPERS 
 def _safe_json_load(s, default):
     try:
         return json.loads(s) if s else copy.deepcopy(default)
@@ -299,7 +299,7 @@ def enforce_maintenance_mode():
         pass
 
 
-# ---------- DATASET HELPERS ----------
+# DATASET HELPERS
 def active_data_path():
     if has_request_context():
         return session.get("DATA_PATH_ACTIVE", meta_get("active_dataset_path", DATA_PATH_DEFAULT))
@@ -367,7 +367,7 @@ def detect_date_column():
     return None
 
 
-# ---------- FILTER / SEARCH / SORT ----------
+# FILTER / SEARCH / SORT
 def safe_float(s):
     try:
         return float(s)
@@ -411,7 +411,7 @@ def build_where(x_col, y_col, date_col, scatter_cols=None):
                 where.append(f"{qident(y_col)} <= ?")
                 params.append(mx)
 
-    # search across all columns (safe)
+    # search across all columns
     if search:
         cols = get_columns()
         parts = []
@@ -494,7 +494,7 @@ def compute_kpis(where_clause, params, x_col, y_col):
     }
 
 
-# ---------- HEATMAP PNG ----------
+# HEATMAP PNG
 def save_heatmap_png(df_any, out_path, title="Correlation Heatmap", small=True):
     plt.close("all")
     num_df = df_any.select_dtypes(include="number").dropna(axis=1, how="all")
@@ -534,7 +534,7 @@ def save_heatmap_png(df_any, out_path, title="Correlation Heatmap", small=True):
     plt.close()
 
 
-# ---------- CONTEXT ----------
+# CONTEXT
 def base_context():
     x_col, y_col = pick_columns()
     date_col = detect_date_column()
@@ -591,38 +591,53 @@ def base_context():
 def login():
     init_db()
     ensure_dataset_imported()
+
     ctx = base_context()
 
-    if request.method == "POST":
-        username = (request.form.get("username") or "").strip()
-        password = (request.form.get("password") or "").strip()
+    # GET -> show login page
+    if request.method == "GET":
+        return render_template("login.html", **ctx, title="Login")
 
-        if not username or not password:
-            flash("Please enter username and password.", "danger")
-            return render_template("login.html", **ctx, title="Login")
+    # POST -> authenticate
+    username = (request.form.get("username") or "").strip()
+    password = (request.form.get("password") or "").strip()
+    remember = (request.form.get("remember") == "1")
 
-        conn = db()
-        try:
-            user = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
-        finally:
-            conn.close()
+    # Basic validation
+    if not username or not password:
+        flash("Please enter username and password.", "danger")
+        return render_template("login.html", **ctx, title="Login")
 
-        if not user:
-            flash("Account does not exist. Please create an account.", "danger")
-            return redirect(url_for("login") + "#register")
+    # Fetch user
+    conn = db()
+    try:
+        user_row = conn.execute(
+            "SELECT username, password_hash, role FROM users WHERE username=?",
+            (username,)
+        ).fetchone()
+    finally:
+        conn.close()
 
-        if not check_password_hash(user["password_hash"], password):
-            flash("Wrong password. Please try again.", "danger")
-            return redirect(url_for("login", username=username))
+    # Username not found
+    if not user_row:
+        flash("Account does not exist. Please create an account.", "danger")
+        return redirect(url_for("login") + "#register")
 
-        session["user"] = user["username"]
-        session["role"] = user["role"]
-        session.permanent = (request.form.get("remember") == "1")
+    # Wrong password
+    if not check_password_hash(user_row["password_hash"], password):
+        flash("Incorrect password. Please try again.", "danger")
+        return redirect(url_for("login", username=username))
 
-        flash(f"Welcome {user['username']}!", "success")
-        return redirect(url_for("index"))
+    # Success
+    session.clear()  
+    session["user"] = user_row["username"]
+    session["role"] = user_row["role"]
 
-    return render_template("login.html", **ctx, title="Login")
+    # Remember me
+    session.permanent = remember
+
+    flash("Login successful. Welcome!", "success")
+    return redirect(url_for("index"))
 
 
 @app.route("/register", methods=["POST"])
@@ -994,7 +1009,7 @@ def account_delete():
     flash("Account deleted.", "info")
     return redirect(url_for("login"))
 
-# SETTINGS (My Preferences Only — no System Settings)
+# SETTINGS 
 @app.route("/settings", methods=["GET", "POST"])
 def settings_page():
     init_db()
@@ -1009,23 +1024,13 @@ def settings_page():
     if request.method == "POST":
         scope = (request.form.get("scope") or "user").strip().lower()
 
-        # ---------- EXPORT MY SETTINGS ----------
-        if scope == "export_user":
-            data = get_user_settings(username)
-            return Response(
-                json.dumps(data, indent=2),
-                mimetype="application/json",
-                headers={"Content-Disposition": "attachment; filename=my_settings.json"}
-            )
-
-        # ---------- RESET MY SETTINGS ----------
+        # RESET MY SETTINGS
         if scope == "reset_user":
             set_user_settings(username, copy.deepcopy(DEFAULT_USER_SETTINGS))
             flash("Your settings were reset to defaults.", "info")
             return redirect(url_for("settings_page"))
 
-        # ---------- IMPORT MY SETTINGS (ADVANCED FEATURE) ----------
-        # Optional: allow importing a JSON blob from a textarea named "settings_json"
+        # IMPORT MY SETTINGS
         if scope == "import_user":
             raw = (request.form.get("settings_json") or "").strip()
             if not raw:
@@ -1040,7 +1045,7 @@ def settings_page():
                 flash("Invalid JSON. Please paste valid settings JSON.", "danger")
                 return redirect(url_for("settings_page"))
 
-            # Merge imported -> defaults (so missing keys are filled safely)
+            # Merge imported -> 
             merged = copy.deepcopy(DEFAULT_USER_SETTINGS)
             merged.update(obj)
 
