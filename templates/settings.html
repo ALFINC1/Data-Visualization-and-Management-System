@@ -1,208 +1,337 @@
 {% extends "base.html" %}
 {% block content %}
 
-{% set a = app_settings if app_settings is defined else {} %}
 {% set u = user_settings if user_settings is defined else {} %}
 
-<div class="d-flex flex-wrap align-items-center justify-content-between mb-3 ">
+<div class="d-flex flex-wrap align-items-center justify-content-between mb-3">
   <div>
     <h5 class="mb-1 text-secondary">Settings</h5>
-    <div class="small text-muted py-2">Manage your preferences{% if is_admin %} and system configuration{% endif %}.</div>
+    <div class="small text-muted">Manage your preferences.</div>
   </div>
 
-<ul class="nav nav-pills mb-3 ">
-  <li class="nav-item ">
-    <a class="nav-link {% if tab=='user' %}active{% endif %}" href="/settings?tab=user">
-      <i class="bi bi-person-gear"></i> My Preferences
-    </a>
-  </li>
-  {% if is_admin %}
-  <li class="nav-item">
-    <a class="nav-link {% if tab=='system' %}active{% endif %}" href="/settings?tab=system">
-      <i class="bi bi-sliders"></i> System Settings
-    </a>
-  </li>
-  {% endif %}
-</ul>
-
-{% if tab == 'user' %}
-<div class="card container-fluid">
-  <div class="card-header">My Preferences</div>
-  <div class="card-body">
-
-    <form method="post" class="row g-3">
-      <input type="hidden" name="scope" value="user">
-
-      <div class="col-md-4">
-        <label class="form-label small text-muted">Theme</label>
-        <select class="form-select" name="theme">
-          <option value="auto" {% if u.theme=='auto' %}selected{% endif %}>Auto</option>
-          <option value="light" {% if u.theme=='light' %}selected{% endif %}>Light</option>
-          <option value="dark" {% if u.theme=='dark' %}selected{% endif %}>Dark</option>
-        </select>
-      </div>
-
-      <div class="col-md-4">
-        <label class="form-label small text-muted">Font Scale</label>
-        <input class="form-control" type="number" step="0.05" min="0.8" max="1.4" name="font_scale" value="{{ u.font_scale }}">
-      </div>
-
-      <div class="col-md-4">
-        <label class="form-label small text-muted">Density</label>
-        <select class="form-select" name="density">
-          <option value="auto" {% if u.density=='auto' %}selected{% endif %}>Auto</option>
-          <option value="comfortable" {% if u.density=='comfortable' %}selected{% endif %}>Comfortable</option>
-          <option value="compact" {% if u.density=='compact' %}selected{% endif %}>Compact</option>
-        </select>
-      </div>
-
-      <div class="col-md-4">
-        <label class="form-label small text-muted">Table Per Page (0 = default)</label>
-        <input class="form-control" type="number" min="0" max="200" name="table_per_page" value="{{ u.table_per_page }}">
-      </div>
-
-      <div class="col-12 d-flex gap-2 flex-wrap">
-        <button class="btn btn-primary" type="submit">
-          <i class="bi bi-check2-circle"></i> Save
-        </button>
-
-        <form method="post" class="m-0">
-          <input type="hidden" name="scope" value="reset_user">
-          <button class="btn btn-outline-danger" type="submit">
-            <i class="bi bi-arrow-counterclockwise"></i> Reset My Settings
-          </button>
-        </form>
-      </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <form method="post" class="m-0">
+      <input type="hidden" name="scope" value="export_user">
+      <button class="btn btn-outline-secondary btn-sm" type="submit">
+        <i class="bi bi-download"></i> Export My Settings
+      </button>
     </form>
 
-  </div>
-</div>
-{% endif %}
-
-{% if tab == 'system' and is_admin %}
-<div class="card">
-  <div class="card-header">System Settings</div>
-  <div class="card-body">
-
-    <form method="post" class="row g-3">
-      <input type="hidden" name="scope" value="system">
-
-      <div class="col-md-6">
-        <label class="form-label small text-muted">App Name</label>
-        <input class="form-control" name="app_name" value="{{ a.app_name }}">
-      </div>
-
-      <div class="col-md-6">
-        <label class="form-label small text-muted">App Title</label>
-        <input class="form-control" name="app_title" value="{{ a.app_title }}">
-      </div>
-
-      <div class="col-12">
-        <label class="form-label small text-muted">About</label>
-        <textarea class="form-control" name="about_text" rows="3">{{ a.about_text }}</textarea>
-      </div>
-
-      <div class="col-md-4">
-        <label class="form-label small text-muted">Default Theme</label>
-        <select class="form-select" name="default_theme">
-          <option value="light" {% if a.default_theme=='light' %}selected{% endif %}>Light</option>
-          <option value="dark" {% if a.default_theme=='dark' %}selected{% endif %}>Dark</option>
-        </select>
-      </div>
-
-      <div class="col-md-4">
-        <label class="form-label small text-muted">Accent Color</label>
-        <input class="form-control" name="accent_color" value="{{ a.accent_color }}">
-      </div>
-
-      <div class="col-md-4">
-        <label class="form-label small text-muted">Base Font Size</label>
-        <input class="form-control" type="number" min="12" max="18" name="base_font_size_px" value="{{ a.base_font_size_px }}">
-      </div>
-
-      <div class="col-md-4">
-        <label class="form-label small text-muted">Font Family</label>
-        <select class="form-select" name="font_family">
-          <option value="system" {% if a.font_family=='system' %}selected{% endif %}>System</option>
-          <option value="serif" {% if a.font_family=='serif' %}selected{% endif %}>Serif</option>
-          <option value="mono" {% if a.font_family=='mono' %}selected{% endif %}>Mono</option>
-          <option value="custom" {% if a.font_family=='custom' %}selected{% endif %}>Custom</option>
-        </select>
-      </div>
-
-      <div class="col-md-8">
-        <label class="form-label small text-muted">Custom Font Stack</label>
-        <input class="form-control" name="custom_font_stack" value="{{ a.custom_font_stack }}">
-      </div>
-
-      <div class="col-md-4">
-        <label class="form-label small text-muted">System Density</label>
-        <select class="form-select" name="density_system">
-          <option value="comfortable" {% if a.density=='comfortable' %}selected{% endif %}>Comfortable</option>
-          <option value="compact" {% if a.density=='compact' %}selected{% endif %}>Compact</option>
-        </select>
-      </div>
-
-      <div class="col-md-4">
-        <label class="form-label small text-muted">Chart Max Points</label>
-        <input class="form-control" type="number" min="500" max="20000" name="chart_max_points" value="{{ a.chart_max_points }}">
-      </div>
-
-      <div class="col-md-4">
-        <label class="form-label small text-muted">Default Table Per Page</label>
-        <input class="form-control" type="number" min="5" max="200" name="table_per_page_system" value="{{ a.table_per_page }}">
-      </div>
-
-      <div class="col-md-4">
-        <label class="form-label small text-muted">Timezone</label>
-        <input class="form-control" name="timezone" value="{{ a.timezone }}">
-      </div>
-
-      <div class="col-md-4">
-        <label class="form-label small text-muted">Language</label>
-        <input class="form-control" name="language" value="{{ a.language }}">
-      </div>
-
-      <div class="col-12">
-        <div class="form-check">
-          <input class="form-check-input" type="checkbox" name="allow_registration" value="1" {% if a.allow_registration %}checked{% endif %}>
-          <label class="form-check-label">Allow Registration</label>
-        </div>
-        <div class="form-check mt-1">
-          <input class="form-check-input" type="checkbox" name="maintenance_mode" value="1" {% if a.maintenance_mode %}checked{% endif %}>
-          <label class="form-check-label text-danger">Maintenance Mode</label>
-        </div>
-      </div>
-
-      <div class="col-md-4">
-        <label class="form-label small text-muted">LinkedIn</label>
-        <input class="form-control" name="linkedin" value="{{ a.social_links.linkedin if a.social_links is defined else '' }}">
-      </div>
-      <div class="col-md-4">
-        <label class="form-label small text-muted">GitHub</label>
-        <input class="form-control" name="github" value="{{ a.social_links.github if a.social_links is defined else '' }}">
-      </div>
-      <div class="col-md-4">
-        <label class="form-label small text-muted">Telegram</label>
-        <input class="form-control" name="telegram" value="{{ a.social_links.telegram if a.social_links is defined else '' }}">
-      </div>
-
-      <div class="col-12 d-flex gap-2 flex-wrap">
-        <button class="btn btn-primary" type="submit">
-          <i class="bi bi-check2-circle"></i> Save System Settings
-        </button>
-
-        <form method="post" class="m-0">
-          <input type="hidden" name="scope" value="reset_system">
-          <button class="btn btn-outline-danger" type="submit">
-            <i class="bi bi-arrow-counterclockwise"></i> Reset System Defaults
-          </button>
-        </form>
-      </div>
+    <form method="post" class="m-0">
+      <input type="hidden" name="scope" value="reset_user">
+      <button class="btn btn-outline-danger btn-sm" type="submit">
+        <i class="bi bi-arrow-counterclockwise"></i> Reset
+      </button>
     </form>
-
   </div>
 </div>
-{% endif %}
+
+<div class="row g-3">
+
+  <!-- Preferences -->
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header">My Preferences</div>
+      <div class="card-body">
+
+        <form method="post" class="row g-3" id="userSettingsForm">
+          <input type="hidden" name="scope" value="user">
+
+          <!-- Theme -->
+          <div class="col-md-4">
+            <label class="form-label small text-muted">Theme</label>
+            <select class="form-select" name="theme" id="prefTheme">
+              <option value="auto" {% if u.theme=='auto' %}selected{% endif %}>Auto</option>
+              <option value="light" {% if u.theme=='light' %}selected{% endif %}>Light</option>
+              <option value="dark" {% if u.theme=='dark' %}selected{% endif %}>Dark</option>
+            </select>
+            <div class="form-text">Preview applies instantly. Saved after clicking Save.</div>
+          </div>
+
+          <!-- Density -->
+          <div class="col-md-4">
+            <label class="form-label small text-muted">Density</label>
+            <select class="form-select" name="density" id="prefDensity">
+              <option value="auto" {% if u.density=='auto' %}selected{% endif %}>Auto</option>
+              <option value="comfortable" {% if u.density=='comfortable' %}selected{% endif %}>Comfortable</option>
+              <option value="compact" {% if u.density=='compact' %}selected{% endif %}>Compact</option>
+            </select>
+          </div>
+
+          <!-- Font Scale -->
+          <div class="col-md-4">
+            <label class="form-label small text-muted">Font Scale</label>
+            <input class="form-range" type="range" min="0.8" max="1.4" step="0.05"
+                   name="font_scale" id="prefFontScale"
+                   value="{{ u.font_scale if u.font_scale is defined else 1.0 }}">
+            <div class="small text-muted">
+              Current: <span id="fontScaleLabel">{{ u.font_scale if u.font_scale is defined else 1.0 }}</span>
+            </div>
+          </div>
+
+          <!-- Font Family -->
+          <div class="col-md-4">
+            <label class="form-label small text-muted">Font Family</label>
+            <select class="form-select" name="font_family" id="prefFontFamily">
+              {% set ff = u.font_family|default('auto') %}
+              <option value="auto" {% if ff=='auto' %}selected{% endif %}>Auto (system default)</option>
+              <option value="system" {% if ff=='system' %}selected{% endif %}>System UI</option>
+              <option value="serif" {% if ff=='serif' %}selected{% endif %}>Serif</option>
+              <option value="mono" {% if ff=='mono' %}selected{% endif %}>Monospace</option>
+              <option value="arial" {% if ff=='arial' %}selected{% endif %}>Arial</option>
+              <option value="georgia" {% if ff=='georgia' %}selected{% endif %}>Georgia</option>
+              <option value="courier" {% if ff=='courier' %}selected{% endif %}>Courier New</option>
+              <option value="custom" {% if ff=='custom' %}selected{% endif %}>Custom</option>
+            </select>
+          </div>
+
+          <div class="col-md-8">
+            <label class="form-label small text-muted">Custom Font Stack</label>
+            <input class="form-control" name="custom_font_stack" id="prefCustomFont"
+                   value="{{ u.custom_font_stack|default('') }}"
+                   placeholder="e.g. 'Inter', system-ui, sans-serif">
+            <div class="form-text">Used only if Font Family = Custom.</div>
+          </div>
+
+          <!-- Table per page -->
+          <div class="col-md-4">
+            <label class="form-label small text-muted">Table Rows per Page</label>
+            <input class="form-control" type="number" min="0" max="200"
+                   name="table_per_page"
+                   value="{{ u.table_per_page if u.table_per_page is defined else 0 }}">
+            <div class="form-text">0 = default.</div>
+          </div>
+
+          <!-- Default start page -->
+          <div class="col-md-4">
+            <label class="form-label small text-muted">Default Start Page</label>
+            {% set startp = u.start_page|default('dashboard') %}
+            <select class="form-select" name="start_page">
+              <option value="dashboard" {% if startp=='dashboard' %}selected{% endif %}>Dashboard</option>
+              <option value="data" {% if startp=='data' %}selected{% endif %}>Data Table</option>
+              <option value="charts" {% if startp=='charts' %}selected{% endif %}>Charts</option>
+            </select>
+            <div class="form-text">Where to go after login (optional).</div>
+          </div>
+
+          <!-- Sidebar preference -->
+          <div class="col-md-4">
+            <label class="form-label small text-muted">Sidebar Default</label>
+            {% set sb = u.sidebar_default|default('remember') %}
+            <select class="form-select" name="sidebar_default">
+              <option value="remember" {% if sb=='remember' %}selected{% endif %}>Remember last state</option>
+              <option value="open" {% if sb=='open' %}selected{% endif %}>Always open</option>
+              <option value="collapsed" {% if sb=='collapsed' %}selected{% endif %}>Always collapsed</option>
+            </select>
+          </div>
+
+          <!-- Filters panel preference -->
+          <div class="col-md-4">
+            <label class="form-label small text-muted">Filters Panel Default</label>
+            {% set fp = u.filters_panel|default('remember') %}
+            <select class="form-select" name="filters_panel">
+              <option value="remember" {% if fp=='remember' %}selected{% endif %}>Remember last state</option>
+              <option value="open" {% if fp=='open' %}selected{% endif %}>Always open</option>
+              <option value="collapsed" {% if fp=='collapsed' %}selected{% endif %}>Always collapsed</option>
+            </select>
+          </div>
+
+          <!-- Accessibility -->
+          <div class="col-md-4">
+            <label class="form-label small text-muted">Reduce Motion</label>
+            {% set rm = u.reduce_motion|default('auto') %}
+            <select class="form-select" name="reduce_motion" id="prefReduceMotion">
+              <option value="auto" {% if rm=='auto' %}selected{% endif %}>Auto</option>
+              <option value="off" {% if rm=='off' %}selected{% endif %}>Off</option>
+              <option value="on" {% if rm=='on' %}selected{% endif %}>On</option>
+            </select>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label small text-muted">High Contrast</label>
+            {% set hc = u.high_contrast|default('off') %}
+            <select class="form-select" name="high_contrast" id="prefHighContrast">
+              <option value="off" {% if hc=='off' %}selected{% endif %}>Off</option>
+              <option value="on" {% if hc=='on' %}selected{% endif %}>On</option>
+            </select>
+          </div>
+
+          <div class="col-12 d-flex gap-2 flex-wrap">
+            <button class="btn btn-primary" type="submit">
+              <i class="bi bi-check2-circle"></i> Save Preferences
+            </button>
+
+            <span class="small text-muted align-self-center">
+              Tip: Preview applies instantly, but settings are saved only when you click Save.
+            </span>
+          </div>
+        </form>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Preview / Help -->
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header">Preview</div>
+      <div class="card-body">
+        <div class="small text-muted mb-2">Theme</div>
+        <div class="d-flex gap-2 align-items-center">
+          <span class="badge text-bg-light border" id="themePreviewLabel">{{ u.theme|default('auto') }}</span>
+          <span class="small text-muted">Preview changes instantly</span>
+        </div>
+
+        <hr class="my-3">
+
+        <div class="small text-muted mb-2">Font</div>
+        <div class="small">
+          Scale: <b id="fontPreviewLabel">{{ u.font_scale|default(1.0) }}</b><br>
+          Family: <b id="fontFamilyPreviewLabel">{{ u.font_family|default('auto') }}</b>
+        </div>
+
+        <hr class="my-3">
+
+        <div class="small text-muted mb-2">Accessibility</div>
+        <div class="small">
+          Reduce Motion: <b id="rmPreviewLabel">{{ u.reduce_motion|default('auto') }}</b><br>
+          High Contrast: <b id="hcPreviewLabel">{{ u.high_contrast|default('off') }}</b>
+        </div>
+      </div>
+    </div>
+
+    <!-- Danger zone -->
+    <div class="card border border-danger mt-3">
+      <div class="card-header text-danger">Danger Zone</div>
+      <div class="card-body">
+        {% if role == 'admin' %}
+          <div class="small text-muted">
+            Admin account cannot be deleted from the UI.
+          </div>
+        {% else %}
+          <div class="small text-muted mb-2">
+            Deleting your account will permanently remove your profile and login.
+            Type <b>DELETE</b> to confirm.
+          </div>
+
+          <form action="{{ url_for('account_delete') }}" method="post" class="row g-2">
+            <div class="col-12">
+              <input class="form-control" name="confirm_text" placeholder="Type DELETE" required>
+            </div>
+            <div class="col-12 d-grid">
+              <button class="btn btn-danger" type="submit">
+                <i class="bi bi-trash"></i> Delete My Account
+              </button>
+            </div>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ===== Instant preview (theme + font + density) ===== */
+(function(){
+  const themeSel = document.getElementById("prefTheme");
+  const fontScale = document.getElementById("prefFontScale");
+  const densitySel = document.getElementById("prefDensity");
+  const ff = document.getElementById("prefFontFamily");
+  const cf = document.getElementById("prefCustomFont");
+  const reduceMotion = document.getElementById("prefReduceMotion");
+  const highContrast = document.getElementById("prefHighContrast");
+
+  const themeLabel = document.getElementById("themePreviewLabel");
+  const fontScaleLabel = document.getElementById("fontScaleLabel");
+  const fontPreviewLabel = document.getElementById("fontPreviewLabel");
+  const fontFamilyPreviewLabel = document.getElementById("fontFamilyPreviewLabel");
+  const rmPreviewLabel = document.getElementById("rmPreviewLabel");
+  const hcPreviewLabel = document.getElementById("hcPreviewLabel");
+
+  function applyThemePreview(val){
+    const root = document.documentElement;
+    if(val === "light" || val === "dark"){
+      root.setAttribute("data-theme", val);
+    } else {
+      const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      root.setAttribute("data-theme", prefersDark ? "dark" : "light");
+    }
+    if(themeLabel) themeLabel.textContent = val;
+  }
+
+  function applyFontScalePreview(val){
+    const root = document.documentElement;
+    const n = parseFloat(val || "1");
+    if(n && n > 0) root.style.setProperty("--user-font-scale", String(n));
+    if(fontScaleLabel) fontScaleLabel.textContent = n.toFixed(2);
+    if(fontPreviewLabel) fontPreviewLabel.textContent = n.toFixed(2);
+  }
+
+  function fontStackFromChoice(choice, custom){
+    if(choice === "system" || choice === "auto") return "system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+    if(choice === "serif") return "ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif";
+    if(choice === "mono") return "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace";
+    if(choice === "arial") return "Arial, Helvetica, sans-serif";
+    if(choice === "georgia") return "Georgia, 'Times New Roman', Times, serif";
+    if(choice === "courier") return "'Courier New', Courier, monospace";
+    if(choice === "custom" && (custom || "").trim()) return custom.trim();
+    return "system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+  }
+
+  function applyFontPreview(){
+    const root = document.documentElement;
+    const choice = ff ? ff.value : "auto";
+    const custom = cf ? cf.value : "";
+    root.style.setProperty("--dvms-font", fontStackFromChoice(choice, custom));
+    if(fontFamilyPreviewLabel) fontFamilyPreviewLabel.textContent = choice;
+  }
+
+  function applyDensityPreview(val){
+    const d = val || "auto";
+    document.body.classList.toggle("density-compact", d === "compact");
+  }
+
+  function applyAccessibilityPreview(){
+    // Reduce motion (simple)
+    const rm = reduceMotion ? reduceMotion.value : "auto";
+    const hc = highContrast ? highContrast.value : "off";
+
+    if(rmPreviewLabel) rmPreviewLabel.textContent = rm;
+    if(hcPreviewLabel) hcPreviewLabel.textContent = hc;
+
+    // High contrast: add/remove class
+    document.body.classList.toggle("dvms-high-contrast", hc === "on");
+  }
+
+  themeSel && themeSel.addEventListener("change", () => applyThemePreview(themeSel.value));
+  fontScale && fontScale.addEventListener("input", () => applyFontScalePreview(fontScale.value));
+  densitySel && densitySel.addEventListener("change", () => applyDensityPreview(densitySel.value));
+  ff && ff.addEventListener("change", applyFontPreview);
+  cf && cf.addEventListener("input", applyFontPreview);
+
+  reduceMotion && reduceMotion.addEventListener("change", applyAccessibilityPreview);
+  highContrast && highContrast.addEventListener("change", applyAccessibilityPreview);
+
+  // initial preview from current selections
+  themeSel && applyThemePreview(themeSel.value);
+  fontScale && applyFontScalePreview(fontScale.value);
+  densitySel && applyDensityPreview(densitySel.value);
+  applyFontPreview();
+  applyAccessibilityPreview();
+})();
+</script>
+
+<style>
+/* Optional high contrast mode (simple) */
+body.dvms-high-contrast .card,
+body.dvms-high-contrast .filter-bar{
+  border: 2px solid rgba(0,0,0,.35) !important;
+}
+html[data-theme="dark"] body.dvms-high-contrast .card,
+html[data-theme="dark"] body.dvms-high-contrast .filter-bar{
+  border: 2px solid rgba(255,255,255,.35) !important;
+}
+</style>
 
 {% endblock %}

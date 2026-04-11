@@ -1,179 +1,292 @@
 {% extends "base.html" %}
 {% block content %}
 
-<h5 class="mb-3 text-secondary">Analytics Dashboard</h5>
+{% set qs = request.query_string.decode('utf-8') %}
+{% set q = ('?' ~ qs) if qs else '' %}
+
+<div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
+  <div>
+    <h5 class="mb-1 text-secondary">Analytics Dashboard</h5>
+    <div class="small text-muted">
+      Dataset: <strong>{{ active_data_path if active_data_path is defined else "default" }}</strong>
+      {% if kpis is defined and kpis and kpis.rows is defined %}
+        · Rows: <strong>{{ kpis.rows }}</strong>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 flex-wrap">
+    <a class="btn btn-outline-secondary btn-sm" href="/data{{ q }}">
+      <i class="bi bi-table"></i> Open Data
+    </a>
+    <a class="btn btn-outline-secondary btn-sm" href="/profile{{ q }}">
+      <i class="bi bi-clipboard-data"></i> Data Profile
+    </a>
+    {% if export_url is defined and export_url %}
+      <a class="btn btn-outline-primary btn-sm" href="{{ export_url }}">
+        <i class="bi bi-download"></i> Export CSV
+      </a>
+    {% endif %}
+    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="window.print()">
+      <i class="bi bi-printer"></i> Print
+    </button>
+  </div>
+</div>
 
 {% if error %}
   <div class="alert alert-danger">{{ error }}</div>
 {% endif %}
 
+<!-- Active Filters -->
+{% if request.args %}
+  <div class="mb-3 d-flex flex-wrap gap-2 align-items-center">
+    <span class="small text-muted"><i class="bi bi-funnel"></i> Active filters:</span>
+
+    {% if request.args.get('category') %}
+      <span class="badge text-bg-light border">
+        Category: <strong>{{ request.args.get('category') }}</strong>
+      </span>
+    {% endif %}
+    {% if request.args.get('date') %}
+      <span class="badge text-bg-light border">
+        Date: <strong>{{ request.args.get('date') }}</strong>
+      </span>
+    {% endif %}
+    {% if request.args.get('min') %}
+      <span class="badge text-bg-light border">
+        Min: <strong>{{ request.args.get('min') }}</strong>
+      </span>
+    {% endif %}
+    {% if request.args.get('max') %}
+      <span class="badge text-bg-light border">
+        Max: <strong>{{ request.args.get('max') }}</strong>
+      </span>
+    {% endif %}
+    {% if request.args.get('search') %}
+      <span class="badge text-bg-light border">
+        Search: <strong>{{ request.args.get('search') }}</strong>
+      </span>
+    {% endif %}
+
+    <a class="btn btn-sm btn-outline-secondary ms-auto" href="/">
+      <i class="bi bi-eraser"></i> Clear Filters
+    </a>
+  </div>
+{% endif %}
+
+<!-- KPI Tiles -->
 {% if kpis is defined and kpis %}
 <div class="row g-3 mb-3">
-  <div class="col-md-2">
-    <div class="card"><div class="card-body text-center">
-      <div class="small text-muted">Rows</div><div class="fw-bold">{{ kpis.rows }}</div>
-    </div></div>
+  <div class="col-6 col-md-2">
+    <div class="card">
+      <div class="card-body text-center">
+        <div class="small text-muted"><i class="bi bi-list-ul"></i> Rows</div>
+        <div class="fw-bold fs-5">{{ kpis.rows }}</div>
+      </div>
+    </div>
   </div>
-  <div class="col-md-2">
-    <div class="card"><div class="card-body text-center">
-      <div class="small text-muted">Columns</div><div class="fw-bold">{{ kpis.cols }}</div>
-    </div></div>
+
+  <div class="col-6 col-md-2">
+    <div class="card">
+      <div class="card-body text-center">
+        <div class="small text-muted"><i class="bi bi-columns-gap"></i> Columns</div>
+        <div class="fw-bold fs-5">{{ kpis.cols }}</div>
+      </div>
+    </div>
   </div>
-  <div class="col-md-2">
-    <div class="card"><div class="card-body text-center">
-      <div class="small text-muted">Numeric</div><div class="fw-bold">{{ kpis.numeric_cols }}</div>
-    </div></div>
+
+  <div class="col-6 col-md-2">
+    <div class="card">
+      <div class="card-body text-center">
+        <div class="small text-muted"><i class="bi bi-123"></i> Numeric</div>
+        <div class="fw-bold fs-5">{{ kpis.numeric_cols }}</div>
+      </div>
+    </div>
   </div>
-  <div class="col-md-2">
-    <div class="card"><div class="card-body text-center">
-      <div class="small text-muted">Distinct</div><div class="fw-bold">{{ kpis.distinct_categories }}</div>
-    </div></div>
+
+  <div class="col-6 col-md-2">
+    <div class="card">
+      <div class="card-body text-center">
+        <div class="small text-muted"><i class="bi bi-grid-1x2"></i> Distinct</div>
+        <div class="fw-bold fs-5">{{ kpis.distinct_categories }}</div>
+      </div>
+    </div>
   </div>
-  <div class="col-md-2">
-    <div class="card"><div class="card-body text-center">
-      <div class="small text-muted">Min</div><div class="fw-bold">{{ kpis.y_min }}</div>
-    </div></div>
+
+  <div class="col-6 col-md-2">
+    <div class="card">
+      <div class="card-body text-center">
+        <div class="small text-muted"><i class="bi bi-arrow-down"></i> Min</div>
+        <div class="fw-bold fs-5">{{ kpis.y_min if kpis.y_min is not none else "-" }}</div>
+      </div>
+    </div>
   </div>
-  <div class="col-md-2">
-    <div class="card"><div class="card-body text-center">
-      <div class="small text-muted">Max</div><div class="fw-bold">{{ kpis.y_max }}</div>
-    </div></div>
+
+  <div class="col-6 col-md-2">
+    <div class="card">
+      <div class="card-body text-center">
+        <div class="small text-muted"><i class="bi bi-arrow-up"></i> Max</div>
+        <div class="fw-bold fs-5">{{ kpis.y_max if kpis.y_max is not none else "-" }}</div>
+      </div>
+    </div>
   </div>
 </div>
 {% endif %}
 
-{% set qs = request.query_string.decode('utf-8') %}
-{% set q = ('?' ~ qs) if qs else '' %}
-
+<!-- Quick Drill Down -->
 {% if top_categories is defined and top_categories %}
-<div class="mb-3">
-  <div class="small text-muted mb-1">Quick Drill‑Down </div>
-  <div class="d-flex gap-2 flex-wrap">
-    {% for c in top_categories %}
-      <a class="btn btn-outline-primary btn-sm"
-         href="/drill?to=data&category={{ c|urlencode }}{% if qs %}&{{ qs }}{% endif %}">
-        {{ c }}
-      </a>
-    {% endfor %}
+<div class="card mb-3">
+  <div class="card-header">Quick Drill‑Down</div>
+  <div class="card-body">
+    <div class="small text-muted mb-2">
+      Click a top category to open filtered rows in the Data page.
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      {% for c in top_categories %}
+        <a class="btn btn-outline-primary btn-sm"
+           href="/drill?to=data&category={{ c|urlencode }}{% if qs %}&{{ qs }}{% endif %}">
+          {{ c }}
+        </a>
+      {% endfor %}
+    </div>
   </div>
 </div>
 {% endif %}
 
+<!-- Charts Grid -->
 <div class="row g-3">
-
-  <div class="col-md-4">
+  <div class="col-lg-6">
     <div class="card">
-      <div class="card-header">Bar Chart</div>
-      <div class="card-body text-center">
-        {% if bar_url %}
-          <img src="{{ bar_url }}" class="img-fluid" alt="Bar Chart">
-        {% else %}
-          <div id="barDiv" style="min-height:280px;"></div>
-        {% endif %}
-        <div class="mt-2">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-bar-chart"></i> Bar</span>
+        <div class="d-flex gap-2">
           <a class="btn btn-outline-secondary btn-sm" href="/bar{{ q }}">Open</a>
-          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('static', filename='dashboard_bar.png') }}" download>Download</a>
+          <button class="btn btn-outline-primary btn-sm" type="button" onclick="downloadPlot('barDiv')">
+            <i class="bi bi-image"></i> PNG
+          </button>
         </div>
+      </div>
+      <div class="card-body">
+        <div id="barDiv" style="min-height:320px;"></div>
       </div>
     </div>
   </div>
 
-  <div class="col-md-4">
+  <div class="col-lg-6">
     <div class="card">
-      <div class="card-header">Line Chart</div>
-      <div class="card-body text-center">
-        {% if line_url %}
-          <img src="{{ line_url }}" class="img-fluid" alt="Line Chart">
-        {% else %}
-          <div id="lineDiv" style="min-height:280px;"></div>
-        {% endif %}
-        <div class="mt-2">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-graph-up"></i> Line</span>
+        <div class="d-flex gap-2">
           <a class="btn btn-outline-secondary btn-sm" href="/line{{ q }}">Open</a>
-          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('static', filename='dashboard_line.png') }}" download>Download</a>
+          <button class="btn btn-outline-primary btn-sm" type="button" onclick="downloadPlot('lineDiv')">
+            <i class="bi bi-image"></i> PNG
+          </button>
         </div>
+      </div>
+      <div class="card-body">
+        <div id="lineDiv" style="min-height:320px;"></div>
       </div>
     </div>
   </div>
 
-  <div class="col-md-4">
+  <div class="col-lg-6">
     <div class="card">
-      <div class="card-header">Pie Chart</div>
-      <div class="card-body text-center">
-        {% if pie_url %}
-          <img src="{{ pie_url }}" class="img-fluid" alt="Pie Chart">
-        {% else %}
-          <div id="pieDiv" style="min-height:280px;"></div>
-        {% endif %}
-        <div class="mt-2">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-pie-chart"></i> Pie</span>
+        <div class="d-flex gap-2">
           <a class="btn btn-outline-secondary btn-sm" href="/pie{{ q }}">Open</a>
-          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('static', filename='dashboard_pie.png') }}" download>Download</a>
+          <button class="btn btn-outline-primary btn-sm" type="button" onclick="downloadPlot('pieDiv')">
+            <i class="bi bi-image"></i> PNG
+          </button>
         </div>
+      </div>
+      <div class="card-body">
+        <div id="pieDiv" style="min-height:320px;"></div>
       </div>
     </div>
   </div>
 
-  <div class="col-md-6">
+  <div class="col-lg-6">
     <div class="card">
-      <div class="card-header">Scatter Plot</div>
-      <div class="card-body text-center">
-        {% if scatter_url %}
-          <img src="{{ scatter_url }}" class="img-fluid" alt="Scatter Plot">
-        {% else %}
-          <div id="scatterDiv" style="min-height:320px;"></div>
-        {% endif %}
-        <div class="mt-2">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-diagram-3"></i> Scatter</span>
+        <div class="d-flex gap-2">
           <a class="btn btn-outline-secondary btn-sm" href="/scatter{{ q }}">Open</a>
-          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('static', filename='dashboard_scatter.png') }}" download>Download</a>
+          <button class="btn btn-outline-primary btn-sm" type="button" onclick="downloadPlot('scatterDiv')">
+            <i class="bi bi-image"></i> PNG
+          </button>
         </div>
+      </div>
+      <div class="card-body">
+        <div id="scatterDiv" style="min-height:320px;"></div>
       </div>
     </div>
   </div>
 
-  <div class="col-md-6">
+  <div class="col-12">
     <div class="card">
-      <div class="card-header">Heatmap</div>
-      <div class="card-body text-center">
-        {% if heatmap_url %}
-          <img src="{{ heatmap_url }}" class="img-fluid" alt="Heatmap">
-        {% else %}
-          <div id="heatmapDiv" style="min-height:320px;"></div>
-        {% endif %}
-        <div class="mt-2">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-grid-3x3-gap"></i> Correlation Heatmap</span>
+        <div class="d-flex gap-2">
           <a class="btn btn-outline-secondary btn-sm" href="/heatmap{{ q }}">Open</a>
-          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('static', filename='dashboard_heatmap.png') }}" download>Download</a>
+          <button class="btn btn-outline-primary btn-sm" type="button" onclick="downloadPlot('heatmapDiv')">
+            <i class="bi bi-image"></i> PNG
+          </button>
         </div>
+      </div>
+      <div class="card-body">
+        <div id="heatmapDiv" style="min-height:360px;"></div>
       </div>
     </div>
   </div>
-
 </div>
 
-{% if not bar_url or not line_url or not pie_url or not scatter_url or not heatmap_url %}
+<!-- Plotly loader -->
 <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 <script>
 async function draw(divId, type){
   const el = document.getElementById(divId);
   if(!el) return;
 
-  const res = await fetch(`/api/chart/${type}` + window.location.search);
-  const obj = await res.json();
+  el.innerHTML = `<div class="text-center small text-muted py-5">
+      <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+      Loading ${type}...
+    </div>`;
 
-  if(obj.error){
+  const res = await fetch(`/api/chart/${type}` + window.location.search);
+  let obj = null;
+
+  try { obj = await res.json(); }
+  catch(e){
+    el.innerHTML = `<div class="alert alert-warning mb-0">Chart response is invalid.</div>`;
+    return;
+  }
+
+  if(obj && obj.error){
     el.innerHTML = `<div class="alert alert-warning mb-0">${obj.error}</div>`;
     return;
   }
 
-  Plotly.newPlot(divId, obj.data, obj.layout, {responsive:true});
+  Plotly.newPlot(divId, obj.data, obj.layout, {responsive:true, displayModeBar:false});
 
-  el.on('plotly_click', function(data){
-    if(!data.points || !data.points.length) return;
-    const x = data.points[0].x;
-    if(!x) return;
-    const url = new URL(window.location.origin + "/drill");
-    url.searchParams.set("to","data");
-    url.searchParams.set("category", x);
-    window.location.href = url.toString();
-  });
+  // Drill down 
+  if(type === "bar" || type === "line" || type === "pie"){
+    el.on('plotly_click', function(data){
+      if(!data.points || !data.points.length) return;
+      const x = data.points[0].x || data.points[0].label;
+      if(!x) return;
+      const url = new URL(window.location.origin + "/drill");
+      url.searchParams.set("to","data");
+      url.searchParams.set("category", x);
+      window.location.href = url.toString();
+    });
+  }
+}
+
+function downloadPlot(divId){
+  const el = document.getElementById(divId);
+  if(!el) return;
+  Plotly.downloadImage(divId, {format:'png', filename: divId + "_chart", height: 720, width: 1200});
 }
 
 draw("barDiv","bar");
@@ -182,6 +295,5 @@ draw("pieDiv","pie");
 draw("scatterDiv","scatter");
 draw("heatmapDiv","heatmap");
 </script>
-{% endif %}
 
 {% endblock %}

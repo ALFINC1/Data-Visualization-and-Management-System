@@ -1,11 +1,13 @@
 import os
 import time
-
 import json
 import uuid
 import copy
+import secrets
 import logging
 import sqlite3
+from datetime import timedelta
+
 import numpy as np
 import pandas as pd
 
@@ -23,6 +25,7 @@ from flask import (
 
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
+
 from settings import DEFAULT_APP_SETTINGS, DEFAULT_USER_SETTINGS
 from service.service import DataService
 
@@ -30,6 +33,7 @@ from service.service import DataService
 # APP
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "dvms-dev-secret")
+app.permanent_session_lifetime = timedelta(days=30)
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -55,11 +59,12 @@ ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 
 
-# DIR
+# ---------- DIR / DB ----------
 def init_dirs():
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     os.makedirs(STORAGE_DIR, exist_ok=True)
     os.makedirs(STATIC_DIR, exist_ok=True)
+    os.makedirs(os.path.join(STATIC_DIR, "avatars"), exist_ok=True)
 
 
 def db():
@@ -80,6 +85,19 @@ def table_exists(name: str) -> bool:
         connection.close()
 
 
+def ensure_columns(conn, table_name: str, columns: dict):
+    """Safely add missing columns to an existing SQLite table."""
+    existing = {r["name"] for r in conn.execute(f"PRAGMA table_info({table_name})").fetchall()}
+    for col, typ in columns.items():
+        if col not in existing:
+            conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {col} {typ}")
+
+
+def qident(name: str) -> str:
+    """Safely quote SQLite identifiers (columns)."""
+    return '"' + str(name).replace('"', '""') + '"'
+
+
 def init_db():
     init_dirs()
     connection = db()
@@ -92,6 +110,7 @@ def init_db():
                 role TEXT NOT NULL
             )
         """)
+
         connection.execute("""
             CREATE TABLE IF NOT EXISTS presets(
                 id TEXT PRIMARY KEY,
@@ -101,6 +120,7 @@ def init_db():
                 owner TEXT NOT NULL
             )
         """)
+
         connection.execute(f"""
             CREATE TABLE IF NOT EXISTS {META_TABLE}(
                 k TEXT PRIMARY KEY,
@@ -108,13 +128,17 @@ def init_db():
             )
         """)
 
-        # user_profiles table
+        # User profiles: Option A + Option B stored together
         connection.execute("""
             CREATE TABLE IF NOT EXISTS user_profiles(
                 username TEXT PRIMARY KEY,
                 name TEXT,
+                first_name TEXT,
+                last_name TEXT,
                 email TEXT,
                 phone TEXT,
+                sex TEXT,
+                birthdate TEXT,
                 address TEXT,
                 bio TEXT,
                 avatar_path TEXT,
@@ -122,6 +146,7 @@ def init_db():
             )
         """)
 
+        # User settings
         connection.execute("""
             CREATE TABLE IF NOT EXISTS user_settings(
                 username TEXT PRIMARY KEY,
@@ -129,7 +154,25 @@ def init_db():
                 updated_at INTEGER NOT NULL
             )
         """)
-        connection.commit()
+
+        # Password reset tokens
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS password_resets(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL,
+                token TEXT NOT NULL,
+                expires_at INTEGER NOT NULL,
+                used INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+
+        # Safe migrations (if DB existed before)
+        ensure_columns(connection, "user_profiles", {
+            "first_name": "TEXT",
+            "last_name": "TEXT",
+            "sex": "TEXT",
+            "birthdate": "TEXT"
+        })
 
         connection.commit()
 
@@ -146,7 +189,7 @@ def init_db():
         connection.close()
 
 
-# META
+# ---------- META ----------
 def meta_get(key: str, default=None):
     connection = db()
     try:
@@ -169,10 +212,7 @@ def meta_set(key: str, value: str):
         connection.close()
 
 
-# AUTH HELPERS
-def current_user():
-    return session.get("user") if has_request_context() else None
-
+# ---------- SETTINGS HELPERS ----------
 def _safe_json_load(s, default):
     try:
         return json.loads(s) if s else copy.deepcopy(default)
@@ -181,16 +221,17 @@ def _safe_json_load(s, default):
 
 
 def get_app_settings():
-    # stored as JSON in META_TABLE under key "app_settings"
     raw = meta_get("app_settings", "")
     data = _safe_json_load(raw, DEFAULT_APP_SETTINGS)
-    # merge defaults -> stored (stored overrides defaults)
+
     merged = copy.deepcopy(DEFAULT_APP_SETTINGS)
     merged.update(data or {})
-    # nested merge for social links
+
+    # nested merge
     if "social_links" in DEFAULT_APP_SETTINGS:
         merged["social_links"] = copy.deepcopy(DEFAULT_APP_SETTINGS["social_links"])
         merged["social_links"].update((data or {}).get("social_links", {}) or {})
+
     return merged
 
 
@@ -228,18 +269,11 @@ def set_user_settings(username: str, settings_dict):
     finally:
         conn.close()
 
-@app.before_request
-def enforce_maintenance_mode():
-    try:
-        s = get_app_settings()
-        if s.get("maintenance_mode") and request.endpoint not in ("login", "logout", "static"):
-            # allow admins through
-            if not (login_required() and current_role() == "admin"):
-                flash("System is in maintenance mode. Please try again later.", "warning")
-                return redirect(url_for("login"))
-    except Exception:
-        # fail open (don't block app if settings broken)
-        pass
+
+# ---------- AUTH HELPERS ----------
+def current_user():
+    return session.get("user") if has_request_context() else None
+
 
 def current_role():
     return session.get("role", "viewer") if has_request_context() else "viewer"
@@ -250,10 +284,22 @@ def login_required():
 
 
 def admin_required():
-    return (current_user() is not None) and (current_role() == "admin")
+    return login_required() and current_role() == "admin"
 
 
-# DATASET HELPERS
+@app.before_request
+def enforce_maintenance_mode():
+    try:
+        s = get_app_settings()
+        if s.get("maintenance_mode") and request.endpoint not in ("login", "logout", "static"):
+            if not admin_required():
+                flash("System is in maintenance mode. Please try again later.", "warning")
+                return redirect(url_for("login"))
+    except Exception:
+        pass
+
+
+# ---------- DATASET HELPERS ----------
 def active_data_path():
     if has_request_context():
         return session.get("DATA_PATH_ACTIVE", meta_get("active_dataset_path", DATA_PATH_DEFAULT))
@@ -263,6 +309,8 @@ def active_data_path():
 def import_to_sqlite(path: str):
     ds = DataService(path)
     df = ds.load_df().copy()
+
+    # normalize columns
     df.columns = [str(c).strip().replace(" ", "_") for c in df.columns]
 
     connection = db()
@@ -319,7 +367,7 @@ def detect_date_column():
     return None
 
 
-# FILTER / SEARCH / SORT
+# ---------- FILTER / SEARCH / SORT ----------
 def safe_float(s):
     try:
         return float(s)
@@ -338,37 +386,37 @@ def build_where(x_col, y_col, date_col, scatter_cols=None):
     search = request.args.get("search", "").strip().lower()
 
     if category and x_col:
-        where.append(f"CAST({x_col} AS TEXT) = ?")
+        where.append(f"CAST({qident(x_col)} AS TEXT) = ?")
         params.append(category)
 
     if date_val and date_col:
-        where.append(f"CAST({date_col} AS TEXT) = ?")
+        where.append(f"CAST({qident(date_col)} AS TEXT) = ?")
         params.append(date_val)
 
     # numeric range
     if scatter_cols and len(scatter_cols) >= 2:
         a, b = scatter_cols[0], scatter_cols[1]
         if mn is not None:
-            where.append(f"({a} >= ? AND {b} >= ?)")
+            where.append(f"({qident(a)} >= ? AND {qident(b)} >= ?)")
             params.extend([mn, mn])
         if mx is not None:
-            where.append(f"({a} <= ? AND {b} <= ?)")
+            where.append(f"({qident(a)} <= ? AND {qident(b)} <= ?)")
             params.extend([mx, mx])
     else:
         if y_col:
             if mn is not None:
-                where.append(f"{y_col} >= ?")
+                where.append(f"{qident(y_col)} >= ?")
                 params.append(mn)
             if mx is not None:
-                where.append(f"{y_col} <= ?")
+                where.append(f"{qident(y_col)} <= ?")
                 params.append(mx)
 
-    # search
+    # search across all columns (safe)
     if search:
         cols = get_columns()
         parts = []
         for c in cols:
-            parts.append(f"LOWER(CAST({c} AS TEXT)) LIKE ?")
+            parts.append(f"LOWER(CAST({qident(c)} AS TEXT)) LIKE ?")
             params.append(f"%{search}%")
         where.append("(" + " OR ".join(parts) + ")")
 
@@ -382,8 +430,8 @@ def build_filter_options(x_col, date_col):
         categories = []
         if x_col:
             df = pd.read_sql_query(
-                f"SELECT CAST({x_col} AS TEXT) AS v, COUNT(*) AS c "
-                f"FROM {DATA_TABLE} WHERE {x_col} IS NOT NULL "
+                f"SELECT CAST({qident(x_col)} AS TEXT) AS v, COUNT(*) AS c "
+                f"FROM {DATA_TABLE} WHERE {qident(x_col)} IS NOT NULL "
                 f"GROUP BY v ORDER BY c DESC LIMIT 200",
                 conn
             )
@@ -392,8 +440,8 @@ def build_filter_options(x_col, date_col):
         date_values = []
         if date_col:
             df = pd.read_sql_query(
-                f"SELECT CAST({date_col} AS TEXT) AS v, COUNT(*) AS c "
-                f"FROM {DATA_TABLE} WHERE {date_col} IS NOT NULL "
+                f"SELECT CAST({qident(date_col)} AS TEXT) AS v, COUNT(*) AS c "
+                f"FROM {DATA_TABLE} WHERE {qident(date_col)} IS NOT NULL "
                 f"GROUP BY v ORDER BY c DESC LIMIT 200",
                 conn
             )
@@ -406,7 +454,6 @@ def build_filter_options(x_col, date_col):
 
 def compute_kpis(where_clause, params, x_col, y_col):
     cols = get_columns()
-
     conn = db()
     try:
         total_rows = int(pd.read_sql_query(
@@ -417,14 +464,14 @@ def compute_kpis(where_clause, params, x_col, y_col):
         distinct = 0
         if x_col:
             distinct = int(pd.read_sql_query(
-                f"SELECT COUNT(DISTINCT CAST({x_col} AS TEXT)) AS d FROM {DATA_TABLE}{where_clause}",
+                f"SELECT COUNT(DISTINCT CAST({qident(x_col)} AS TEXT)) AS d FROM {DATA_TABLE}{where_clause}",
                 conn, params=params
             ).loc[0, "d"])
 
         y_min = y_mean = y_max = None
         if y_col:
             stats = pd.read_sql_query(
-                f"SELECT MIN({y_col}) AS mn, AVG({y_col}) AS av, MAX({y_col}) AS mx FROM {DATA_TABLE}{where_clause}",
+                f"SELECT MIN({qident(y_col)}) AS mn, AVG({qident(y_col)}) AS av, MAX({qident(y_col)}) AS mx FROM {DATA_TABLE}{where_clause}",
                 conn, params=params
             )
             y_min = stats.loc[0, "mn"]
@@ -433,7 +480,6 @@ def compute_kpis(where_clause, params, x_col, y_col):
 
         df_sample = pd.read_sql_query(f"SELECT * FROM {DATA_TABLE} LIMIT 300", conn)
         numeric_cols = len(df_sample.select_dtypes(include="number").columns)
-
     finally:
         conn.close()
 
@@ -448,10 +494,9 @@ def compute_kpis(where_clause, params, x_col, y_col):
     }
 
 
-# HEATMAP PNG
+# ---------- HEATMAP PNG ----------
 def save_heatmap_png(df_any, out_path, title="Correlation Heatmap", small=True):
     plt.close("all")
-
     num_df = df_any.select_dtypes(include="number").dropna(axis=1, how="all")
 
     if not num_df.empty:
@@ -461,11 +506,8 @@ def save_heatmap_png(df_any, out_path, title="Correlation Heatmap", small=True):
     if num_df.shape[1] < 2:
         plt.figure(figsize=(4, 3) if small else (10, 8))
         plt.axis("off")
-        plt.text(
-            0.5, 0.5,
-            "Not enough numeric columns\nfor correlation heatmap",
-            ha="center", va="center", fontsize=10
-        )
+        plt.text(0.5, 0.5, "Not enough numeric columns\nfor correlation heatmap",
+                 ha="center", va="center", fontsize=10)
         plt.tight_layout()
         plt.savefig(out_path, dpi=140, bbox_inches="tight")
         plt.close()
@@ -475,21 +517,15 @@ def save_heatmap_png(df_any, out_path, title="Correlation Heatmap", small=True):
     if corr.isna().all().all():
         plt.figure(figsize=(4, 3) if small else (10, 8))
         plt.axis("off")
-        plt.text(
-            0.5, 0.5,
-            "Correlation could not be computed\n(check numeric data)",
-            ha="center", va="center", fontsize=10
-        )
+        plt.text(0.5, 0.5, "Correlation could not be computed\n(check numeric data)",
+                 ha="center", va="center", fontsize=10)
         plt.tight_layout()
         plt.savefig(out_path, dpi=140, bbox_inches="tight")
         plt.close()
         return
 
     plt.figure(figsize=(4.8, 3.2) if small else (10, 8))
-    ax = sns.heatmap(
-        corr, cmap="coolwarm", annot=False,
-        square=True, linewidths=0.5, cbar=False
-    )
+    ax = sns.heatmap(corr, cmap="coolwarm", annot=False, square=True, linewidths=0.5, cbar=False)
     ax.set_title(title, fontsize=10)
     plt.xticks(rotation=ROTATION, ha="right", fontsize=FONT_SIZE)
     plt.yticks(fontsize=FONT_SIZE)
@@ -498,7 +534,7 @@ def save_heatmap_png(df_any, out_path, title="Correlation Heatmap", small=True):
     plt.close()
 
 
-# CONTEXT
+# ---------- CONTEXT ----------
 def base_context():
     x_col, y_col = pick_columns()
     date_col = detect_date_column()
@@ -510,9 +546,28 @@ def base_context():
     finally:
         conn.close()
 
+    # Navbar profile
+    nav_profile = None
+    if current_user():
+        conn2 = db()
+        try:
+            p = conn2.execute("SELECT name, email, avatar_path FROM user_profiles WHERE username=?",
+                              (current_user(),)).fetchone()
+        finally:
+            conn2.close()
+
+        nav_profile = {
+            "display_name": (p["name"] if p and p["name"] else current_user()),
+            "email": (p["email"] if p and p["email"] else f"{current_user()}@dvms.local"),
+            "avatar_url": (p["avatar_path"] if p and p["avatar_path"] else "")
+        }
+
     return dict(
         user=current_user(),
         role=current_role(),
+        nav_profile=nav_profile,
+        app_settings=get_app_settings(),
+        user_settings=get_user_settings(current_user() or ""),
         active_data_path=active_data_path(),
         categories=categories,
         date_values=date_values,
@@ -536,10 +591,15 @@ def base_context():
 def login():
     init_db()
     ensure_dataset_imported()
+    ctx = base_context()
 
     if request.method == "POST":
-        username = request.form.get("username", "").strip()
-        password = request.form.get("password", "").strip()
+        username = (request.form.get("username") or "").strip()
+        password = (request.form.get("password") or "").strip()
+
+        if not username or not password:
+            flash("Please enter username and password.", "danger")
+            return render_template("login.html", **ctx, title="Login")
 
         conn = db()
         try:
@@ -547,37 +607,224 @@ def login():
         finally:
             conn.close()
 
-        if not user or not check_password_hash(user["password_hash"], password):
-            flash("Invalid username or password.", "danger")
-            return redirect(url_for("login"))
+        if not user:
+            flash("Account does not exist. Please create an account.", "danger")
+            return redirect(url_for("login") + "#register")
+
+        if not check_password_hash(user["password_hash"], password):
+            flash("Wrong password. Please try again.", "danger")
+            return redirect(url_for("login", username=username))
 
         session["user"] = user["username"]
         session["role"] = user["role"]
+        session.permanent = (request.form.get("remember") == "1")
+
         flash(f"Welcome {user['username']}!", "success")
         return redirect(url_for("index"))
 
-    return render_template("login.html", **base_context(), title="Login")
+    return render_template("login.html", **ctx, title="Login")
 
-# ACCOUNT PAGE
+
+@app.route("/register", methods=["POST"])
+def register():
+    init_db()
+    ensure_dataset_imported()
+
+    if not get_app_settings().get("allow_registration", True):
+        flash("Registration is disabled by admin.", "danger")
+        return redirect(url_for("login") + "#register")
+
+    first_name = (request.form.get("first_name") or "").strip()
+    last_name = (request.form.get("last_name") or "").strip()
+    email = (request.form.get("email") or "").strip()
+    phone = (request.form.get("phone") or "").strip()
+    sex = (request.form.get("sex") or "").strip()
+    birthdate = (request.form.get("birthdate") or "").strip()
+
+    username = (request.form.get("username") or "").strip()
+    password = (request.form.get("password") or "").strip()
+    confirm = (request.form.get("confirm_password") or "").strip()
+
+    if len(first_name) < 2 or len(last_name) < 2:
+        flash("Please enter first name and last name.", "danger")
+        return redirect(url_for("login") + "#register")
+
+    if "@" not in email or "." not in email:
+        flash("Please enter a valid email address.", "danger")
+        return redirect(url_for("login") + "#register")
+
+    if len(username) < 3:
+        flash("Username must be at least 3 characters.", "danger")
+        return redirect(url_for("login") + "#register")
+
+    reserved = {ADMIN_USER.lower(), "admin", "administrator", "root"}
+    if username.lower() in reserved:
+        flash("This username is reserved. Choose another username.", "danger")
+        return redirect(url_for("login") + "#register")
+
+    if len(password) < 6:
+        flash("Password must be at least 6 characters.", "danger")
+        return redirect(url_for("login") + "#register")
+
+    if password != confirm:
+        flash("Passwords do not match.", "danger")
+        return redirect(url_for("login") + "#register")
+
+    if sex not in ("Female", "Male", "Prefer not to say"):
+        flash("Please select sex.", "danger")
+        return redirect(url_for("login") + "#register")
+
+    role = "viewer"
+    full_name = (first_name + " " + last_name).strip()
+
+    connection = db()
+    try:
+        exists = connection.execute("SELECT username FROM users WHERE username=?", (username,)).fetchone()
+        if exists:
+            flash("Username already exists. Try another.", "danger")
+            return redirect(url_for("login") + "#register")
+
+        connection.execute(
+            "INSERT INTO users(username, password_hash, role) VALUES(?,?,?)",
+            (username, generate_password_hash(password), role)
+        )
+
+        # Save
+        connection.execute("""
+            INSERT INTO user_profiles(username, name, first_name, last_name, email, phone, sex, birthdate, updated_at)
+            VALUES(?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(username) DO UPDATE SET
+                name=excluded.name,
+                first_name=excluded.first_name,
+                last_name=excluded.last_name,
+                email=excluded.email,
+                phone=excluded.phone,
+                sex=excluded.sex,
+                birthdate=excluded.birthdate,
+                updated_at=excluded.updated_at
+        """, (username, full_name, first_name, last_name, email, phone, sex, birthdate, int(time.time())))
+
+        connection.commit()
+    finally:
+        connection.close()
+
+    flash("Account created successfully! You can login now.", "success")
+    return redirect(url_for("login", username=username))
+
+
+@app.route("/forgot", methods=["POST"])
+def forgot_password():
+    init_db()
+    ensure_dataset_imported()
+
+    identifier = (request.form.get("identifier") or "").strip()
+    if not identifier:
+        flash("Please enter your username or email.", "danger")
+        return redirect(url_for("login"))
+
+    conn = db()
+    try:
+        row = conn.execute("""
+            SELECT u.username
+            FROM users u
+            LEFT JOIN user_profiles p ON p.username = u.username
+            WHERE u.username = ? OR (p.email IS NOT NULL AND p.email = ?)
+        """, (identifier, identifier)).fetchone()
+
+        if not row:
+            flash("If that account exists, you will receive recovery instructions.", "info")
+            return redirect(url_for("login"))
+
+        username = row["username"]
+        token = secrets.token_urlsafe(24)
+        expires_at = int(time.time()) + 15 * 60
+
+        conn.execute("""
+            INSERT INTO password_resets(username, token, expires_at, used)
+            VALUES(?,?,?,0)
+        """, (username, token, expires_at))
+        conn.commit()
+    finally:
+        conn.close()
+
+    flash(f"Password reset token (demo): {token} — valid for 15 minutes.", "info")
+    return redirect(url_for("login"))
+
+
+@app.route("/reset", methods=["POST"])
+def reset_password():
+    init_db()
+    ensure_dataset_imported()
+
+    token = (request.form.get("token") or "").strip()
+    new_pw = (request.form.get("new_password") or "").strip()
+    confirm = (request.form.get("confirm_new_password") or "").strip()
+
+    if len(new_pw) < 6:
+        flash("New password must be at least 6 characters.", "danger")
+        return redirect(url_for("login"))
+
+    if new_pw != confirm:
+        flash("New passwords do not match.", "danger")
+        return redirect(url_for("login"))
+
+    conn = db()
+    try:
+        row = conn.execute("""
+            SELECT id, username, expires_at, used
+            FROM password_resets
+            WHERE token = ?
+            ORDER BY id DESC
+            LIMIT 1
+        """, (token,)).fetchone()
+
+        if not row:
+            flash("Invalid reset token.", "danger")
+            return redirect(url_for("login"))
+
+        if row["used"] == 1:
+            flash("Reset token already used.", "danger")
+            return redirect(url_for("login"))
+
+        if int(time.time()) > int(row["expires_at"]):
+            flash("Reset token expired.", "danger")
+            return redirect(url_for("login"))
+
+        conn.execute("UPDATE users SET password_hash=? WHERE username=?",
+                     (generate_password_hash(new_pw), row["username"]))
+        conn.execute("UPDATE password_resets SET used=1 WHERE id=?", (row["id"],))
+        conn.commit()
+    finally:
+        conn.close()
+
+    flash("Password updated successfully. Please login.", "success")
+    return redirect(url_for("login"))
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    flash("Logged out.", "info")
+    return redirect(url_for("login"))
+
+
+# ACCOUNT 
 @app.route("/account")
 def account():
     init_db()
     ensure_dataset_imported()
-
     if not login_required():
         return redirect(url_for("login"))
 
     ctx = base_context()
+    username = current_user()
 
-    username = current_user() or "Guest"
-    role = current_role() or "viewer"
-
-    # Defaults
+    # defaults
     name = username
-    email = f"{username}@gmail.com"
+    email = f"{username}@dvms.local"
     phone = ""
     address = ""
-    bio = "Hi, Welcome to the DVMS."
+    bio = "Hi, Welcome to DVMS."
     avatar_url = ""
 
     conn = db()
@@ -593,31 +840,27 @@ def account():
     finally:
         conn.close()
 
-    ctx.update(
-        profile_info={
-            "name": name,
-            "role": role,
-            "email": email,
-            "phone": phone,
-            "address": address,
-            "status": "Active",
-            "bio": bio,
-            "avatar_url": avatar_url
-        }
-    )
-
+    ctx.update(profile_info={
+        "name": name,
+        "role": current_role(),
+        "email": email,
+        "phone": phone,
+        "address": address,
+        "status": "Active",
+        "bio": bio,
+        "avatar_url": avatar_url
+    })
     return render_template("account.html", **ctx, title="My Account")
+
 
 @app.route("/account/update", methods=["POST"])
 def account_update():
     init_db()
     ensure_dataset_imported()
-
     if not login_required():
         return redirect(url_for("login"))
 
     username = current_user()
-
     name = (request.form.get("name") or "").strip()
     email = (request.form.get("email") or "").strip()
     phone = (request.form.get("phone") or "").strip()
@@ -649,7 +892,6 @@ def account_update():
 def account_password():
     init_db()
     ensure_dataset_imported()
-
     if not login_required():
         return redirect(url_for("login"))
 
@@ -672,10 +914,8 @@ def account_password():
             flash("Current password is incorrect.", "danger")
             return redirect(url_for("account") + "#security")
 
-        conn.execute(
-            "UPDATE users SET password_hash=? WHERE username=?",
-            (generate_password_hash(new_pw), current_user())
-        )
+        conn.execute("UPDATE users SET password_hash=? WHERE username=?",
+                     (generate_password_hash(new_pw), current_user()))
         conn.commit()
     finally:
         conn.close()
@@ -688,7 +928,6 @@ def account_password():
 def account_avatar():
     init_db()
     ensure_dataset_imported()
-
     if not login_required():
         return redirect(url_for("login"))
 
@@ -702,11 +941,8 @@ def account_avatar():
         flash("Unsupported image type. Use PNG/JPG.", "danger")
         return redirect(url_for("account"))
 
-    avatar_dir = os.path.join(STATIC_DIR, "avatars")
-    os.makedirs(avatar_dir, exist_ok=True)
-
     filename = f"{int(time.time())}_{secure_filename(f.filename)}"
-    save_path = os.path.join(avatar_dir, filename)
+    save_path = os.path.join(STATIC_DIR, "avatars", filename)
     f.save(save_path)
 
     public_url = url_for("static", filename=f"avatars/{filename}")
@@ -732,7 +968,6 @@ def account_avatar():
 def account_delete():
     init_db()
     ensure_dataset_imported()
-
     if not login_required():
         return redirect(url_for("login"))
 
@@ -746,10 +981,10 @@ def account_delete():
         return redirect(url_for("account") + "#danger")
 
     username = current_user()
-
     conn = db()
     try:
         conn.execute("DELETE FROM user_profiles WHERE username=?", (username,))
+        conn.execute("DELETE FROM user_settings WHERE username=?", (username,))
         conn.execute("DELETE FROM users WHERE username=?", (username,))
         conn.commit()
     finally:
@@ -759,60 +994,199 @@ def account_delete():
     flash("Account deleted.", "info")
     return redirect(url_for("login"))
 
-# REGISTER ROUTE
-@app.route("/register", methods=["POST"])
-def register():
+# SETTINGS (My Preferences Only — no System Settings)
+@app.route("/settings", methods=["GET", "POST"])
+def settings_page():
     init_db()
     ensure_dataset_imported()
 
-    username = (request.form.get("username") or "").strip()
-    password = (request.form.get("password") or "").strip()
-    confirm = (request.form.get("confirm_password") or "").strip()
+    if not login_required():
+        return redirect(url_for("login"))
 
-    if len(username) < 3:
-        flash("Username must be at least 3 characters.", "danger")
-        return redirect(url_for("login") + "#register")
+    ctx = base_context()
+    username = current_user()
 
-    reserved = {ADMIN_USER.lower(), "admin", "administrator", "root"}
-    if username.lower() in reserved:
-        flash("This username is reserved. Choose another username.", "danger")
-        return redirect(url_for("login") + "#register")
+    if request.method == "POST":
+        scope = (request.form.get("scope") or "user").strip().lower()
 
-    if len(password) < 6:
-        flash("Password must be at least 6 characters.", "danger")
-        return redirect(url_for("login") + "#register")
+        # ---------- EXPORT MY SETTINGS ----------
+        if scope == "export_user":
+            data = get_user_settings(username)
+            return Response(
+                json.dumps(data, indent=2),
+                mimetype="application/json",
+                headers={"Content-Disposition": "attachment; filename=my_settings.json"}
+            )
 
-    if password != confirm:
-        flash("Passwords do not match.", "danger")
-        return redirect(url_for("login") + "#register")
+        # ---------- RESET MY SETTINGS ----------
+        if scope == "reset_user":
+            set_user_settings(username, copy.deepcopy(DEFAULT_USER_SETTINGS))
+            flash("Your settings were reset to defaults.", "info")
+            return redirect(url_for("settings_page"))
 
-    role = "viewer"
+        # ---------- IMPORT MY SETTINGS (ADVANCED FEATURE) ----------
+        # Optional: allow importing a JSON blob from a textarea named "settings_json"
+        if scope == "import_user":
+            raw = (request.form.get("settings_json") or "").strip()
+            if not raw:
+                flash("Paste settings JSON to import.", "danger")
+                return redirect(url_for("settings_page"))
 
-    connection = db()
-    try:
-        exists = connection.execute("SELECT username FROM users WHERE username=?", (username,)).fetchone()
-        if exists:
-            flash("Username already exists. Try another.", "danger")
-            return redirect(url_for("login") + "#register")
+            try:
+                obj = json.loads(raw)
+                if not isinstance(obj, dict):
+                    raise ValueError("Settings JSON must be an object/dictionary.")
+            except Exception:
+                flash("Invalid JSON. Please paste valid settings JSON.", "danger")
+                return redirect(url_for("settings_page"))
 
-        connection.execute(
-            "INSERT INTO users(username, password_hash, role) VALUES(?,?,?)",
-            (username, generate_password_hash(password), role)
-        )
-        connection.commit()
-    finally:
-        connection.close()
+            # Merge imported -> defaults (so missing keys are filled safely)
+            merged = copy.deepcopy(DEFAULT_USER_SETTINGS)
+            merged.update(obj)
 
-    flash("Account created successfully! You can login now.", "success")
-    return redirect(url_for("login", username=username))
+            # Validate/clamp imported values
+            merged["theme"] = str(merged.get("theme", "auto")).strip()
+            if merged["theme"] not in ("auto", "light", "dark"):
+                merged["theme"] = "auto"
 
+            merged["density"] = str(merged.get("density", "auto")).strip()
+            if merged["density"] not in ("auto", "comfortable", "compact"):
+                merged["density"] = "auto"
 
-@app.route("/logout")
-def logout():
-    session.clear()
-    flash("Logged out.", "info")
-    return redirect(url_for("login"))
+            try:
+                merged["font_scale"] = float(merged.get("font_scale", 1.0))
+            except:
+                merged["font_scale"] = 1.0
+            if merged["font_scale"] < 0.8:
+                merged["font_scale"] = 0.8
+            if merged["font_scale"] > 1.4:
+                merged["font_scale"] = 1.4
 
+            try:
+                merged["table_per_page"] = int(merged.get("table_per_page", 0))
+            except:
+                merged["table_per_page"] = 0
+            if merged["table_per_page"] < 0:
+                merged["table_per_page"] = 0
+            if merged["table_per_page"] > 200:
+                merged["table_per_page"] = 200
+
+            # New preference keys
+            merged["font_family"] = str(merged.get("font_family", "auto")).strip()
+            if merged["font_family"] not in ("auto", "system", "serif", "mono", "arial", "georgia", "courier", "custom"):
+                merged["font_family"] = "auto"
+
+            merged["custom_font_stack"] = str(merged.get("custom_font_stack", "")).strip()
+
+            merged["start_page"] = str(merged.get("start_page", "dashboard")).strip()
+            if merged["start_page"] not in ("dashboard", "data", "charts"):
+                merged["start_page"] = "dashboard"
+
+            merged["sidebar_default"] = str(merged.get("sidebar_default", "remember")).strip()
+            if merged["sidebar_default"] not in ("remember", "open", "collapsed"):
+                merged["sidebar_default"] = "remember"
+
+            merged["filters_panel"] = str(merged.get("filters_panel", "remember")).strip()
+            if merged["filters_panel"] not in ("remember", "open", "collapsed"):
+                merged["filters_panel"] = "remember"
+
+            merged["reduce_motion"] = str(merged.get("reduce_motion", "auto")).strip()
+            if merged["reduce_motion"] not in ("auto", "off", "on"):
+                merged["reduce_motion"] = "auto"
+
+            merged["high_contrast"] = str(merged.get("high_contrast", "off")).strip()
+            if merged["high_contrast"] not in ("off", "on"):
+                merged["high_contrast"] = "off"
+
+            set_user_settings(username, merged)
+            flash("Settings imported successfully.", "success")
+            return redirect(url_for("settings_page"))
+
+        # SAVE MY PREFERENCES
+        if scope == "user":
+            theme = (request.form.get("theme") or "auto").strip()
+            density = (request.form.get("density") or "auto").strip()
+
+            # New fields
+            font_family = (request.form.get("font_family") or "auto").strip()
+            custom_font_stack = (request.form.get("custom_font_stack") or "").strip()
+            start_page = (request.form.get("start_page") or "dashboard").strip()
+            sidebar_default = (request.form.get("sidebar_default") or "remember").strip()
+            filters_panel = (request.form.get("filters_panel") or "remember").strip()
+            reduce_motion = (request.form.get("reduce_motion") or "auto").strip()
+            high_contrast = (request.form.get("high_contrast") or "off").strip()
+
+            # Numeric
+            try:
+                font_scale = float(request.form.get("font_scale") or 1.0)
+            except:
+                font_scale = 1.0
+
+            try:
+                table_per_page = int(request.form.get("table_per_page") or 0)
+            except:
+                table_per_page = 0
+
+            # Validate/clamp
+            if theme not in ("auto", "light", "dark"):
+                theme = "auto"
+
+            if density not in ("auto", "comfortable", "compact"):
+                density = "auto"
+
+            if font_scale < 0.8:
+                font_scale = 0.8
+            if font_scale > 1.4:
+                font_scale = 1.4
+
+            if table_per_page < 0:
+                table_per_page = 0
+            if table_per_page > 200:
+                table_per_page = 200
+
+            if font_family not in ("auto", "system", "serif", "mono", "arial", "georgia", "courier", "custom"):
+                font_family = "auto"
+
+            if start_page not in ("dashboard", "data", "charts"):
+                start_page = "dashboard"
+
+            if sidebar_default not in ("remember", "open", "collapsed"):
+                sidebar_default = "remember"
+
+            if filters_panel not in ("remember", "open", "collapsed"):
+                filters_panel = "remember"
+
+            if reduce_motion not in ("auto", "off", "on"):
+                reduce_motion = "auto"
+
+            if high_contrast not in ("off", "on"):
+                high_contrast = "off"
+
+            # Save
+            s = get_user_settings(username)
+            s.update({
+                "theme": theme,
+                "density": density,
+                "font_scale": font_scale,
+                "table_per_page": table_per_page,
+
+                "font_family": font_family,
+                "custom_font_stack": custom_font_stack,
+                "start_page": start_page,
+                "sidebar_default": sidebar_default,
+                "filters_panel": filters_panel,
+                "reduce_motion": reduce_motion,
+                "high_contrast": high_contrast,
+            })
+            set_user_settings(username, s)
+
+            flash("Your preferences were saved successfully.", "success")
+            return redirect(url_for("settings_page"))
+
+        flash("Unknown settings action.", "danger")
+        return redirect(url_for("settings_page"))
+
+    return render_template("settings.html", **ctx, title="Settings")
 
 # UPLOAD
 @app.route("/upload", methods=["POST"])
@@ -892,6 +1266,7 @@ def preset_apply(preset_id):
         p = conn.execute("SELECT * FROM presets WHERE id=?", (preset_id,)).fetchone()
     finally:
         conn.close()
+
     if not p:
         flash("Preset not found.", "danger")
         return redirect(url_for("index"))
@@ -930,7 +1305,7 @@ def export_csv():
 
     order_clause = ""
     if sort_col and sort_col in cols:
-        order_clause = f" ORDER BY {sort_col} {'DESC' if order == 'desc' else 'ASC'}"
+        order_clause = f" ORDER BY {qident(sort_col)} {'DESC' if order == 'desc' else 'ASC'}"
 
     q = f"SELECT * FROM {DATA_TABLE}{where_clause}{order_clause}"
     conn = db()
@@ -941,11 +1316,14 @@ def export_csv():
 
     csv_data = df.to_csv(index=False)
     filename = f"dvms_export_{int(time.time())}.csv"
-    return Response(csv_data, mimetype="text/csv",
-                    headers={"Content-Disposition": f"attachment; filename={filename}"})
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
 
 
-# EXPORT PDF
+# EXPORT PDF 
 @app.route("/export/report.pdf")
 def export_report_pdf():
     ensure_dataset_imported()
@@ -973,13 +1351,13 @@ def export_report_pdf():
 
     c.drawString(40, 680, "Open dashboard for charts and drill-down.")
     c.setFont("Helvetica", 9)
-    c.drawString(40, 30, "© 2026 Fadil Ahmed — DNA Technology")
+    c.drawString(40, 30, "© 2026 DVMS")
 
     c.save()
     return send_file(pdf_path, as_attachment=True, download_name=os.path.basename(pdf_path))
 
 
-# DRILL DOWN
+# DRILL
 @app.route("/drill")
 def drill():
     category = request.args.get("category", "").strip()
@@ -994,129 +1372,13 @@ def drill():
         return redirect(url_for("index", **args))
     return redirect(url_for("data", **args))
 
-@app.route("/settings", methods=["GET", "POST"])
-def settings_page():
-    init_db()
-    ensure_dataset_imported()
 
-    if not login_required():
-        return redirect(url_for("login"))
-
-    ctx = base_context()
-    username = current_user()
-    is_admin = (current_role() == "admin")
-
-    # which tab to show
-    tab = (request.args.get("tab") or "user").strip().lower()
-    if tab not in ("user", "system"):
-        tab = "user"
-    if tab == "system" and not is_admin:
-        tab = "user"
-
-    if request.method == "POST":
-        scope = (request.form.get("scope") or "user").strip().lower()
-
-        # USER SETTINGS
-        if scope == "user":
-            theme = (request.form.get("theme") or "auto").strip()
-            density = (request.form.get("density") or "auto").strip()
-            font_scale = float(request.form.get("font_scale") or 1.0)
-            table_per_page = int(request.form.get("table_per_page") or 0)
-
-            # clamp values
-            if font_scale < 0.8: font_scale = 0.8
-            if font_scale > 1.4: font_scale = 1.4
-            if table_per_page < 0: table_per_page = 0
-
-            new_user_settings = get_user_settings(username)
-            new_user_settings.update({
-                "theme": theme,
-                "density": density,
-                "font_scale": font_scale,
-                "table_per_page": table_per_page
-            })
-            set_user_settings(username, new_user_settings)
-
-            flash("Your settings saved.", "success")
-            return redirect(url_for("settings_page", tab="user"))
-
-        # SYSTEM SETTINGS
-        if scope == "system":
-            if not is_admin:
-                flash("Admin only: system settings.", "danger")
-                return redirect(url_for("settings_page", tab="user"))
-
-            s = get_app_settings()
-
-            s["app_name"] = (request.form.get("app_name") or s["app_name"]).strip()
-            s["app_title"] = (request.form.get("app_title") or s["app_title"]).strip()
-            s["about_text"] = (request.form.get("about_text") or s["about_text"]).strip()
-
-            s["default_theme"] = (request.form.get("default_theme") or s["default_theme"]).strip()
-            s["accent_color"] = (request.form.get("accent_color") or s["accent_color"]).strip()
-
-            s["font_family"] = (request.form.get("font_family") or s["font_family"]).strip()
-            s["custom_font_stack"] = (request.form.get("custom_font_stack") or s["custom_font_stack"]).strip()
-            s["base_font_size_px"] = int(request.form.get("base_font_size_px") or s["base_font_size_px"])
-
-            s["density"] = (request.form.get("density_system") or s["density"]).strip()
-            s["plotly_template"] = (request.form.get("plotly_template") or s["plotly_template"]).strip()
-
-            s["allow_registration"] = True if request.form.get("allow_registration") == "1" else False
-            s["maintenance_mode"] = True if request.form.get("maintenance_mode") == "1" else False
-
-            s["table_per_page"] = int(request.form.get("table_per_page_system") or s["table_per_page"])
-            s["chart_max_points"] = int(request.form.get("chart_max_points") or s["chart_max_points"])
-
-            s["timezone"] = (request.form.get("timezone") or s["timezone"]).strip()
-            s["language"] = (request.form.get("language") or s["language"]).strip()
-
-            # socials
-            s["social_links"]["linkedin"] = (request.form.get("linkedin") or s["social_links"]["linkedin"]).strip()
-            s["social_links"]["github"] = (request.form.get("github") or s["social_links"]["github"]).strip()
-            s["social_links"]["telegram"] = (request.form.get("telegram") or s["social_links"]["telegram"]).strip()
-
-            set_app_settings(s)
-
-            flash("System settings saved.", "success")
-            return redirect(url_for("settings_page", tab="system"))
-
-        # EXPORT/IMPORT/RESET
-        if scope == "export_user":
-            data = get_user_settings(username)
-            return Response(json.dumps(data, indent=2), mimetype="application/json",
-                            headers={"Content-Disposition": "attachment; filename=user_settings.json"})
-
-        if scope == "export_system":
-            if not is_admin:
-                flash("Admin only: export system settings.", "danger")
-                return redirect(url_for("settings_page", tab="user"))
-            data = get_app_settings()
-            return Response(json.dumps(data, indent=2), mimetype="application/json",
-                            headers={"Content-Disposition": "attachment; filename=system_settings.json"})
-
-        if scope == "reset_user":
-            set_user_settings(username, copy.deepcopy(DEFAULT_USER_SETTINGS))
-            flash("User settings reset to defaults.", "info")
-            return redirect(url_for("settings_page", tab="user"))
-
-        if scope == "reset_system":
-            if not is_admin:
-                flash("Admin only: reset system settings.", "danger")
-                return redirect(url_for("settings_page", tab="user"))
-            set_app_settings(copy.deepcopy(DEFAULT_APP_SETTINGS))
-            flash("System settings reset to defaults.", "info")
-            return redirect(url_for("settings_page", tab="system"))
-
-        flash("Unknown settings action.", "danger")
-        return redirect(url_for("settings_page", tab=tab))
-
-    return render_template("settings.html", **ctx, title="Settings", tab=tab, is_admin=is_admin)
-
-
+# CHART API 
 @app.route("/api/chart/<chart_type>")
 def api_chart(chart_type):
     ensure_dataset_imported()
+
+    max_points = int(get_app_settings().get("chart_max_points", 5000))
 
     x_col, y_col = pick_columns()
     date_col = detect_date_column()
@@ -1125,7 +1387,7 @@ def api_chart(chart_type):
     conn = db()
     try:
         df = pd.read_sql_query(
-            f"SELECT * FROM {DATA_TABLE}{where_clause} LIMIT 5000",
+            f"SELECT * FROM {DATA_TABLE}{where_clause} LIMIT {max_points}",
             conn, params=params
         )
     finally:
@@ -1136,12 +1398,10 @@ def api_chart(chart_type):
 
     cols = df.columns.tolist()
 
-    # pick  x column
     if (not x_col) or (x_col not in cols):
         non_num = df.select_dtypes(exclude="number").columns.tolist()
         x_col = non_num[0] if non_num else (cols[0] if cols else None)
 
-    # pick y column (numeric)
     if (not y_col) or (y_col not in cols) or (not pd.api.types.is_numeric_dtype(df[y_col])):
         num_cols = df.select_dtypes(include="number").columns.tolist()
         y_col = num_cols[0] if num_cols else None
@@ -1190,9 +1450,6 @@ def api_chart(chart_type):
                 return jsonify({"error": "Numeric columns are constant; heatmap not possible"}), 400
 
             corr = nums.corr()
-            if corr.isna().all().all():
-                return jsonify({"error": "Correlation could not be computed"}), 400
-
             fig = px.imshow(corr, text_auto=False, title="Correlation Heatmap")
 
         else:
@@ -1205,12 +1462,11 @@ def api_chart(chart_type):
         return jsonify({"error": f"Chart generation failed: {str(e)}"}), 500
 
 
-# DASHBOARD
+# DASHBOARD 
 @app.route("/")
 def index():
     init_db()
     ensure_dataset_imported()
-
     if not login_required():
         return redirect(url_for("login"))
 
@@ -1226,11 +1482,6 @@ def index():
         ctx["error"] = "No data matches the selected filters."
         return render_template("index.html", **ctx, title="Analytics Dashboard")
 
-    ctx["top_categories"] = (
-        df_plot[x_col].astype(str).value_counts().head(5).index.tolist()
-        if x_col in df_plot.columns else []
-    )
-
     grouped = df_plot.groupby(x_col)[y_col].mean().sort_values(ascending=False).head(5)
 
     bar_file = "dashboard_bar.png"
@@ -1241,63 +1492,22 @@ def index():
     plt.savefig(os.path.join(STATIC_DIR, bar_file), dpi=130, bbox_inches="tight")
     plt.close()
 
-    line_file = "dashboard_line.png"
-    plt.figure(figsize=(4, 3))
-    plt.plot(grouped.index.astype(str), grouped.values, linewidth=2, color="#3f6ad8")
-    plt.xticks(rotation=ROTATION, ha="right", fontsize=FONT_SIZE)
-    plt.tight_layout()
-    plt.savefig(os.path.join(STATIC_DIR, line_file), dpi=130, bbox_inches="tight")
-    plt.close()
-
-    pie_file = "dashboard_pie.png"
-    top = df_plot[x_col].astype(str).value_counts().head(5)
-    plt.figure(figsize=(4, 3))
-    plt.pie(top.values, labels=top.index.tolist(), autopct="%1.1f%%")
-    plt.tight_layout()
-    plt.savefig(os.path.join(STATIC_DIR, pie_file), dpi=130, bbox_inches="tight")
-    plt.close()
-
-    scatter_file = "dashboard_scatter.png"
-    nums = df_plot.select_dtypes(include="number")
-    plt.figure(figsize=(4, 3))
-    if nums.shape[1] >= 2:
-        plt.scatter(nums.iloc[:, 0], nums.iloc[:, 1], alpha=0.6, color="#00a8a8")
-        plt.xlabel(nums.columns[0], fontsize=FONT_SIZE)
-        plt.ylabel(nums.columns[1], fontsize=FONT_SIZE)
-        plt.tight_layout()
-    else:
-        plt.axis("off")
-        plt.text(0.5, 0.5, "Not enough numeric columns", ha="center", va="center")
-    plt.savefig(os.path.join(STATIC_DIR, scatter_file), dpi=130, bbox_inches="tight")
-    plt.close()
-
-    heatmap_file = "dashboard_heatmap.png"
-    save_heatmap_png(df_plot, os.path.join(STATIC_DIR, heatmap_file), title="Correlation Heatmap", small=True)
-
-    ctx.update(
-        bar_url=url_for("static", filename=bar_file) + f"?v={int(time.time())}",
-        line_url=url_for("static", filename=line_file) + f"?v={int(time.time())}",
-        pie_url=url_for("static", filename=pie_file) + f"?v={int(time.time())}",
-        scatter_url=url_for("static", filename=scatter_file) + f"?v={int(time.time())}",
-        heatmap_url=url_for("static", filename=heatmap_file) + f"?v={int(time.time())}",
-    )
-
+    ctx["bar_url"] = url_for("static", filename=bar_file) + f"?v={int(time.time())}"
     return render_template("index.html", **ctx, title="Analytics Dashboard")
 
 
-# DATA TABLE
+# DATA TABLE 
 @app.route("/data")
 def data():
     init_db()
     ensure_dataset_imported()
-
     if not login_required():
         return redirect(url_for("login"))
 
-    x_col, y_col = pick_columns()
-    date_col = detect_date_column()
     ctx = base_context()
 
+    x_col, y_col = pick_columns()
+    date_col = detect_date_column()
     where_clause, params = build_where(x_col, y_col, date_col)
 
     sort_col = request.args.get("sort", "").strip()
@@ -1306,10 +1516,16 @@ def data():
 
     order_clause = ""
     if sort_col and sort_col in cols:
-        order_clause = f" ORDER BY {sort_col} {'DESC' if order == 'desc' else 'ASC'}"
+        order_clause = f" ORDER BY {qident(sort_col)} {'DESC' if order == 'desc' else 'ASC'}"
+
+    # per-user table_per_page override
+    app_s = get_app_settings()
+    user_s = get_user_settings(current_user() or "")
+    per_page = int(user_s.get("table_per_page") or 0) or int(app_s.get("table_per_page") or 15)
+    per_page = max(5, min(200, per_page))
 
     page = int(request.args.get("page", 1))
-    per_page = 15
+    page = max(1, page)
     offset = (page - 1) * per_page
 
     conn = db()
@@ -1335,18 +1551,18 @@ def data():
     )
     return render_template("data.html", **ctx, title="Data")
 
+
 # PROFILE PAGE
 @app.route("/profile")
 def profile():
     init_db()
     ensure_dataset_imported()
-
     if not login_required():
         return redirect(url_for("login"))
 
     ctx = base_context()
-
     df = sample_df(8000)
+
     summary = {
         "rows": int(df.shape[0]),
         "cols": int(df.shape[1]),
@@ -1356,6 +1572,7 @@ def profile():
     missing = (df.isna().sum()).to_dict()
     dtypes = {c: str(df[c].dtype) for c in df.columns}
 
+    # Outliers (simple IQR method)
     outliers = {}
     for c in df.select_dtypes(include="number").columns:
         s = df[c].dropna()
@@ -1390,7 +1607,7 @@ def profile():
     return render_template("profile.html", **ctx, title="Data Profile")
 
 
-# CHART PAGES
+# CHART PAGES 
 @app.route("/bar")
 def bar_chart():
     if not login_required():
