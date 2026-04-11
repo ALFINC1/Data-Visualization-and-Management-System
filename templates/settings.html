@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block content %}
+
+{% set a = app_settings if app_settings is defined else {} %}
+{% set u = user_settings if user_settings is defined else {} %}
+
+<div class="d-flex flex-wrap align-items-center justify-content-between mb-3 ">
+  <div>
+    <h5 class="mb-1 text-secondary">Settings</h5>
+    <div class="small text-muted py-2">Manage your preferences{% if is_admin %} and system configuration{% endif %}.</div>
+  </div>
+
+<ul class="nav nav-pills mb-3 ">
+  <li class="nav-item ">
+    <a class="nav-link {% if tab=='user' %}active{% endif %}" href="/settings?tab=user">
+      <i class="bi bi-person-gear"></i> My Preferences
+    </a>
+  </li>
+  {% if is_admin %}
+  <li class="nav-item">
+    <a class="nav-link {% if tab=='system' %}active{% endif %}" href="/settings?tab=system">
+      <i class="bi bi-sliders"></i> System Settings
+    </a>
+  </li>
+  {% endif %}
+</ul>
+
+{% if tab == 'user' %}
+<div class="card container-fluid">
+  <div class="card-header">My Preferences</div>
+  <div class="card-body">
+
+    <form method="post" class="row g-3">
+      <input type="hidden" name="scope" value="user">
+
+      <div class="col-md-4">
+        <label class="form-label small text-muted">Theme</label>
+        <select class="form-select" name="theme">
+          <option value="auto" {% if u.theme=='auto' %}selected{% endif %}>Auto</option>
+          <option value="light" {% if u.theme=='light' %}selected{% endif %}>Light</option>
+          <option value="dark" {% if u.theme=='dark' %}selected{% endif %}>Dark</option>
+        </select>
+      </div>
+
+      <div class="col-md-4">
+        <label class="form-label small text-muted">Font Scale</label>
+        <input class="form-control" type="number" step="0.05" min="0.8" max="1.4" name="font_scale" value="{{ u.font_scale }}">
+      </div>
+
+      <div class="col-md-4">
+        <label class="form-label small text-muted">Density</label>
+        <select class="form-select" name="density">
+          <option value="auto" {% if u.density=='auto' %}selected{% endif %}>Auto</option>
+          <option value="comfortable" {% if u.density=='comfortable' %}selected{% endif %}>Comfortable</option>
+          <option value="compact" {% if u.density=='compact' %}selected{% endif %}>Compact</option>
+        </select>
+      </div>
+
+      <div class="col-md-4">
+        <label class="form-label small text-muted">Table Per Page (0 = default)</label>
+        <input class="form-control" type="number" min="0" max="200" name="table_per_page" value="{{ u.table_per_page }}">
+      </div>
+
+      <div class="col-12 d-flex gap-2 flex-wrap">
+        <button class="btn btn-primary" type="submit">
+          <i class="bi bi-check2-circle"></i> Save
+        </button>
+
+        <form method="post" class="m-0">
+          <input type="hidden" name="scope" value="reset_user">
+          <button class="btn btn-outline-danger" type="submit">
+            <i class="bi bi-arrow-counterclockwise"></i> Reset My Settings
+          </button>
+        </form>
+      </div>
+    </form>
+
+  </div>
+</div>
+{% endif %}
+
+{% if tab == 'system' and is_admin %}
+<div class="card">
+  <div class="card-header">System Settings</div>
+  <div class="card-body">
+
+    <form method="post" class="row g-3">
+      <input type="hidden" name="scope" value="system">
+
+      <div class="col-md-6">
+        <label class="form-label small text-muted">App Name</label>
+        <input class="form-control" name="app_name" value="{{ a.app_name }}">
+      </div>
+
+      <div class="col-md-6">
+        <label class="form-label small text-muted">App Title</label>
+        <input class="form-control" name="app_title" value="{{ a.app_title }}">
+      </div>
+
+      <div class="col-12">
+        <label class="form-label small text-muted">About</label>
+        <textarea class="form-control" name="about_text" rows="3">{{ a.about_text }}</textarea>
+      </div>
+
+      <div class="col-md-4">
+        <label class="form-label small text-muted">Default Theme</label>
+        <select class="form-select" name="default_theme">
+          <option value="light" {% if a.default_theme=='light' %}selected{% endif %}>Light</option>
+          <option value="dark" {% if a.default_theme=='dark' %}selected{% endif %}>Dark</option>
+        </select>
+      </div>
+
+      <div class="col-md-4">
+        <label class="form-label small text-muted">Accent Color</label>
+        <input class="form-control" name="accent_color" value="{{ a.accent_color }}">
+      </div>
+
+      <div class="col-md-4">
+        <label class="form-label small text-muted">Base Font Size</label>
+        <input class="form-control" type="number" min="12" max="18" name="base_font_size_px" value="{{ a.base_font_size_px }}">
+      </div>
+
+      <div class="col-md-4">
+        <label class="form-label small text-muted">Font Family</label>
+        <select class="form-select" name="font_family">
+          <option value="system" {% if a.font_family=='system' %}selected{% endif %}>System</option>
+          <option value="serif" {% if a.font_family=='serif' %}selected{% endif %}>Serif</option>
+          <option value="mono" {% if a.font_family=='mono' %}selected{% endif %}>Mono</option>
+          <option value="custom" {% if a.font_family=='custom' %}selected{% endif %}>Custom</option>
+        </select>
+      </div>
+
+      <div class="col-md-8">
+        <label class="form-label small text-muted">Custom Font Stack</label>
+        <input class="form-control" name="custom_font_stack" value="{{ a.custom_font_stack }}">
+      </div>
+
+      <div class="col-md-4">
+        <label class="form-label small text-muted">System Density</label>
+        <select class="form-select" name="density_system">
+          <option value="comfortable" {% if a.density=='comfortable' %}selected{% endif %}>Comfortable</option>
+          <option value="compact" {% if a.density=='compact' %}selected{% endif %}>Compact</option>
+        </select>
+      </div>
+
+      <div class="col-md-4">
+        <label class="form-label small text-muted">Chart Max Points</label>
+        <input class="form-control" type="number" min="500" max="20000" name="chart_max_points" value="{{ a.chart_max_points }}">
+      </div>
+
+      <div class="col-md-4">
+        <label class="form-label small text-muted">Default Table Per Page</label>
+        <input class="form-control" type="number" min="5" max="200" name="table_per_page_system" value="{{ a.table_per_page }}">
+      </div>
+
+      <div class="col-md-4">
+        <label class="form-label small text-muted">Timezone</label>
+        <input class="form-control" name="timezone" value="{{ a.timezone }}">
+      </div>
+
+      <div class="col-md-4">
+        <label class="form-label small text-muted">Language</label>
+        <input class="form-control" name="language" value="{{ a.language }}">
+      </div>
+
+      <div class="col-12">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="allow_registration" value="1" {% if a.allow_registration %}checked{% endif %}>
+          <label class="form-check-label">Allow Registration</label>
+        </div>
+        <div class="form-check mt-1">
+          <input class="form-check-input" type="checkbox" name="maintenance_mode" value="1" {% if a.maintenance_mode %}checked{% endif %}>
+          <label class="form-check-label text-danger">Maintenance Mode</label>
+        </div>
+      </div>
+
+      <div class="col-md-4">
+        <label class="form-label small text-muted">LinkedIn</label>
+        <input class="form-control" name="linkedin" value="{{ a.social_links.linkedin if a.social_links is defined else '' }}">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label small text-muted">GitHub</label>
+        <input class="form-control" name="github" value="{{ a.social_links.github if a.social_links is defined else '' }}">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label small text-muted">Telegram</label>
+        <input class="form-control" name="telegram" value="{{ a.social_links.telegram if a.social_links is defined else '' }}">
+      </div>
+
+      <div class="col-12 d-flex gap-2 flex-wrap">
+        <button class="btn btn-primary" type="submit">
+          <i class="bi bi-check2-circle"></i> Save System Settings
+        </button>
+
+        <form method="post" class="m-0">
+          <input type="hidden" name="scope" value="reset_system">
+          <button class="btn btn-outline-danger" type="submit">
+            <i class="bi bi-arrow-counterclockwise"></i> Reset System Defaults
+          </button>
+        </form>
+      </div>
+    </form>
+
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

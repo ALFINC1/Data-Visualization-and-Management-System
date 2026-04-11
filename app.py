@@ -1,7 +1,9 @@
 import os
 import time
+
 import json
 import uuid
+import copy
 import logging
 import sqlite3
 import numpy as np
@@ -21,7 +23,7 @@ from flask import (
 
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
-
+from settings import DEFAULT_APP_SETTINGS, DEFAULT_USER_SETTINGS
 from service.service import DataService
 
 
@@ -106,7 +108,7 @@ def init_db():
             )
         """)
 
-        # ✅ Added: user_profiles table (required for account update/avatar/password features)
+        # user_profiles table
         connection.execute("""
             CREATE TABLE IF NOT EXISTS user_profiles(
                 username TEXT PRIMARY KEY,
@@ -119,6 +121,15 @@ def init_db():
                 updated_at INTEGER
             )
         """)
+
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS user_settings(
+                username TEXT PRIMARY KEY,
+                settings_json TEXT NOT NULL,
+                updated_at INTEGER NOT NULL
+            )
+        """)
+        connection.commit()
 
         connection.commit()
 
@@ -162,6 +173,73 @@ def meta_set(key: str, value: str):
 def current_user():
     return session.get("user") if has_request_context() else None
 
+def _safe_json_load(s, default):
+    try:
+        return json.loads(s) if s else copy.deepcopy(default)
+    except Exception:
+        return copy.deepcopy(default)
+
+
+def get_app_settings():
+    # stored as JSON in META_TABLE under key "app_settings"
+    raw = meta_get("app_settings", "")
+    data = _safe_json_load(raw, DEFAULT_APP_SETTINGS)
+    # merge defaults -> stored (stored overrides defaults)
+    merged = copy.deepcopy(DEFAULT_APP_SETTINGS)
+    merged.update(data or {})
+    # nested merge for social links
+    if "social_links" in DEFAULT_APP_SETTINGS:
+        merged["social_links"] = copy.deepcopy(DEFAULT_APP_SETTINGS["social_links"])
+        merged["social_links"].update((data or {}).get("social_links", {}) or {})
+    return merged
+
+
+def set_app_settings(settings_dict):
+    meta_set("app_settings", json.dumps(settings_dict))
+
+
+def get_user_settings(username: str):
+    if not username:
+        return copy.deepcopy(DEFAULT_USER_SETTINGS)
+
+    conn = db()
+    try:
+        row = conn.execute("SELECT settings_json FROM user_settings WHERE username=?", (username,)).fetchone()
+        data = _safe_json_load(row["settings_json"] if row else "", DEFAULT_USER_SETTINGS)
+    finally:
+        conn.close()
+
+    merged = copy.deepcopy(DEFAULT_USER_SETTINGS)
+    merged.update(data or {})
+    return merged
+
+
+def set_user_settings(username: str, settings_dict):
+    conn = db()
+    try:
+        conn.execute("""
+            INSERT INTO user_settings(username, settings_json, updated_at)
+            VALUES(?,?,?)
+            ON CONFLICT(username) DO UPDATE SET
+                settings_json=excluded.settings_json,
+                updated_at=excluded.updated_at
+        """, (username, json.dumps(settings_dict), int(time.time())))
+        conn.commit()
+    finally:
+        conn.close()
+
+@app.before_request
+def enforce_maintenance_mode():
+    try:
+        s = get_app_settings()
+        if s.get("maintenance_mode") and request.endpoint not in ("login", "logout", "static"):
+            # allow admins through
+            if not (login_required() and current_role() == "admin"):
+                flash("System is in maintenance mode. Please try again later.", "warning")
+                return redirect(url_for("login"))
+    except Exception:
+        # fail open (don't block app if settings broken)
+        pass
 
 def current_role():
     return session.get("role", "viewer") if has_request_context() else "viewer"
@@ -496,10 +574,10 @@ def account():
 
     # Defaults
     name = username
-    email = f"{username}@dvms.local"
-    phone = "+251 9XX XXX XXX"
-    address = "Addis Ababa, Ethiopia"
-    bio = "DVMS user profile (default values). Update later when you add DB fields."
+    email = f"{username}@gmail.com"
+    phone = ""
+    address = ""
+    bio = "Hi, Welcome to the DVMS."
     avatar_url = ""
 
     conn = db()
@@ -916,6 +994,125 @@ def drill():
         return redirect(url_for("index", **args))
     return redirect(url_for("data", **args))
 
+@app.route("/settings", methods=["GET", "POST"])
+def settings_page():
+    init_db()
+    ensure_dataset_imported()
+
+    if not login_required():
+        return redirect(url_for("login"))
+
+    ctx = base_context()
+    username = current_user()
+    is_admin = (current_role() == "admin")
+
+    # which tab to show
+    tab = (request.args.get("tab") or "user").strip().lower()
+    if tab not in ("user", "system"):
+        tab = "user"
+    if tab == "system" and not is_admin:
+        tab = "user"
+
+    if request.method == "POST":
+        scope = (request.form.get("scope") or "user").strip().lower()
+
+        # USER SETTINGS
+        if scope == "user":
+            theme = (request.form.get("theme") or "auto").strip()
+            density = (request.form.get("density") or "auto").strip()
+            font_scale = float(request.form.get("font_scale") or 1.0)
+            table_per_page = int(request.form.get("table_per_page") or 0)
+
+            # clamp values
+            if font_scale < 0.8: font_scale = 0.8
+            if font_scale > 1.4: font_scale = 1.4
+            if table_per_page < 0: table_per_page = 0
+
+            new_user_settings = get_user_settings(username)
+            new_user_settings.update({
+                "theme": theme,
+                "density": density,
+                "font_scale": font_scale,
+                "table_per_page": table_per_page
+            })
+            set_user_settings(username, new_user_settings)
+
+            flash("Your settings saved.", "success")
+            return redirect(url_for("settings_page", tab="user"))
+
+        # SYSTEM SETTINGS
+        if scope == "system":
+            if not is_admin:
+                flash("Admin only: system settings.", "danger")
+                return redirect(url_for("settings_page", tab="user"))
+
+            s = get_app_settings()
+
+            s["app_name"] = (request.form.get("app_name") or s["app_name"]).strip()
+            s["app_title"] = (request.form.get("app_title") or s["app_title"]).strip()
+            s["about_text"] = (request.form.get("about_text") or s["about_text"]).strip()
+
+            s["default_theme"] = (request.form.get("default_theme") or s["default_theme"]).strip()
+            s["accent_color"] = (request.form.get("accent_color") or s["accent_color"]).strip()
+
+            s["font_family"] = (request.form.get("font_family") or s["font_family"]).strip()
+            s["custom_font_stack"] = (request.form.get("custom_font_stack") or s["custom_font_stack"]).strip()
+            s["base_font_size_px"] = int(request.form.get("base_font_size_px") or s["base_font_size_px"])
+
+            s["density"] = (request.form.get("density_system") or s["density"]).strip()
+            s["plotly_template"] = (request.form.get("plotly_template") or s["plotly_template"]).strip()
+
+            s["allow_registration"] = True if request.form.get("allow_registration") == "1" else False
+            s["maintenance_mode"] = True if request.form.get("maintenance_mode") == "1" else False
+
+            s["table_per_page"] = int(request.form.get("table_per_page_system") or s["table_per_page"])
+            s["chart_max_points"] = int(request.form.get("chart_max_points") or s["chart_max_points"])
+
+            s["timezone"] = (request.form.get("timezone") or s["timezone"]).strip()
+            s["language"] = (request.form.get("language") or s["language"]).strip()
+
+            # socials
+            s["social_links"]["linkedin"] = (request.form.get("linkedin") or s["social_links"]["linkedin"]).strip()
+            s["social_links"]["github"] = (request.form.get("github") or s["social_links"]["github"]).strip()
+            s["social_links"]["telegram"] = (request.form.get("telegram") or s["social_links"]["telegram"]).strip()
+
+            set_app_settings(s)
+
+            flash("System settings saved.", "success")
+            return redirect(url_for("settings_page", tab="system"))
+
+        # EXPORT/IMPORT/RESET
+        if scope == "export_user":
+            data = get_user_settings(username)
+            return Response(json.dumps(data, indent=2), mimetype="application/json",
+                            headers={"Content-Disposition": "attachment; filename=user_settings.json"})
+
+        if scope == "export_system":
+            if not is_admin:
+                flash("Admin only: export system settings.", "danger")
+                return redirect(url_for("settings_page", tab="user"))
+            data = get_app_settings()
+            return Response(json.dumps(data, indent=2), mimetype="application/json",
+                            headers={"Content-Disposition": "attachment; filename=system_settings.json"})
+
+        if scope == "reset_user":
+            set_user_settings(username, copy.deepcopy(DEFAULT_USER_SETTINGS))
+            flash("User settings reset to defaults.", "info")
+            return redirect(url_for("settings_page", tab="user"))
+
+        if scope == "reset_system":
+            if not is_admin:
+                flash("Admin only: reset system settings.", "danger")
+                return redirect(url_for("settings_page", tab="user"))
+            set_app_settings(copy.deepcopy(DEFAULT_APP_SETTINGS))
+            flash("System settings reset to defaults.", "info")
+            return redirect(url_for("settings_page", tab="system"))
+
+        flash("Unknown settings action.", "danger")
+        return redirect(url_for("settings_page", tab=tab))
+
+    return render_template("settings.html", **ctx, title="Settings", tab=tab, is_admin=is_admin)
+
 
 @app.route("/api/chart/<chart_type>")
 def api_chart(chart_type):
@@ -1138,7 +1335,6 @@ def data():
     )
     return render_template("data.html", **ctx, title="Data")
 
-
 # PROFILE PAGE
 @app.route("/profile")
 def profile():
@@ -1194,7 +1390,7 @@ def profile():
     return render_template("profile.html", **ctx, title="Data Profile")
 
 
-# DETAIL CHART PAGES
+# CHART PAGES
 @app.route("/bar")
 def bar_chart():
     if not login_required():

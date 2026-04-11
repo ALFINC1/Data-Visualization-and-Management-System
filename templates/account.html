@@ -4,15 +4,14 @@
 {% set info = profile_info if profile_info is defined else {} %}
 {% set role_label = info.get('role', role if role is defined else 'viewer') %}
 {% set name = info.get('name', user if user is defined and user else 'Guest') %}
-{% set email = info.get('email', (user ~ '@dvms.local') if user is defined and user else 'user@dvms.local') %}
+{% set email = info.get('email', (user ~ 'dvms@gmail.com') if user is defined and user else 'dvms@gmail.com') %}
 {% set phone = info.get('phone', '+251 9XX XXX XXX') %}
-{% set address = info.get('address', 'Haramaya, Oromia') %}
+{% set address = info.get('address', 'Addis Ababa, Ethiopia') %}
 {% set status = info.get('status', 'Active') %}
-{% set bio = info.get('bio', 'Welcome to DVMS. Update your profile info anytime.') %}
+{% set bio = info.get('bio', 'Welcome to DVMS.') %}
 {% set avatar_url = info.get('avatar_url', '') %}
 
 <style>
-  /* Scoped styles for the Figma-like Account page */
   .acc-shell { max-width: 980px; margin: 0 auto; }
   .acc-card { border-radius: 18px; overflow: hidden; }
   .acc-hero {
@@ -177,7 +176,7 @@
 
       <div class="tab-content">
 
-        <!-- ===================== PROFILE TAB ===================== -->
+        <!-- PROFILE TAB -->
         <div class="tab-pane fade show active" id="pane-profile" role="tabpanel" aria-labelledby="tab-profile">
 
           <div class="acc-section-title mb-2">Personal Information</div>
@@ -189,7 +188,7 @@
             </div>
 
             <div class="col-md-6 acc-field">
-              <label class="form-label mb-1">Nick Name <span class="acc-mini">(saved locally)</span></label>
+              <label class="form-label mb-1">Nick Name <span class="acc-mini"></span></label>
               <input class="form-control acc-input" id="nickName" value="" data-local="nickname" readonly>
             </div>
 
@@ -204,22 +203,21 @@
             </div>
 
             <div class="col-md-6 acc-field">
-              <label class="form-label mb-1">Gender <span class="acc-mini">(saved locally)</span></label>
+              <label class="form-label mb-1">Gender <span class="acc-mini"></span></label>
               <select class="form-select acc-input" id="gender" data-local="gender" disabled>
                 <option value="">Select</option>
                 <option>Female</option>
                 <option>Male</option>
-                <option>Prefer not to say</option>
               </select>
             </div>
 
             <div class="col-md-6 acc-field">
-              <label class="form-label mb-1">Country <span class="acc-mini">(saved locally)</span></label>
+              <label class="form-label mb-1">Country <span class="acc-mini"></span></label>
               <input class="form-control acc-input" id="country" value="" data-local="country" readonly>
             </div>
 
             <div class="col-md-6 acc-field">
-              <label class="form-label mb-1">Language <span class="acc-mini">(saved locally)</span></label>
+              <label class="form-label mb-1">Language <span class="acc-mini"></span></label>
               <select class="form-select acc-input" id="language" data-local="language" disabled>
                 <option value="">Select</option>
                 <option>English</option>
@@ -229,7 +227,7 @@
             </div>
 
             <div class="col-md-6 acc-field">
-              <label class="form-label mb-1">Time Zone <span class="acc-mini">(saved locally)</span></label>
+              <label class="form-label mb-1">Time Zone <span class="acc-mini"></span></label>
               <select class="form-select acc-input" id="timezone" data-local="timezone" disabled>
                 <option value="">Select</option>
                 <option value="Africa/Addis_Ababa">Africa/Addis_Ababa</option>
@@ -256,10 +254,10 @@
                   <div class="small">
                     <i class="bi bi-envelope"></i>
                     <strong>{{ email }}</strong>
-                    <div class="acc-mini mt-1">Primary email (saved in database)</div>
+                    <div class="acc-mini mt-1">Primary email</div>
                   </div>
                   <button class="btn btn-outline-secondary btn-sm acc-btn" type="button" data-bs-toggle="modal" data-bs-target="#addEmailModal">
-                    <i class="bi bi-plus-circle"></i> Add Email (local)
+                    <i class="bi bi-plus-circle"></i> Add Email
                   </button>
                 </div>
 
@@ -275,14 +273,13 @@
                 Cancel
               </button>
               <span class="acc-mini d-flex align-items-center">
-                Saved fields: name, email, phone, address, bio, avatar.
               </span>
             </div>
           </form>
 
         </div>
 
-        <!-- ===================== SECURITY TAB ===================== -->
+        <!-- SECURITY TAB -->
         <div class="tab-pane fade" id="pane-security" role="tabpanel" aria-labelledby="tab-security">
 
           <div class="acc-section-title mb-2">Security</div>
@@ -335,14 +332,14 @@
 
         </div>
 
-        <!-- ===================== DANGER TAB ===================== -->
+        <!-- DANGER TAB  -->
         <div class="tab-pane fade" id="pane-danger" role="tabpanel" aria-labelledby="tab-danger">
 
           <div class="acc-section-title mb-2 text-danger">Danger Zone</div>
 
           {% if role_label == "admin" %}
             <div class="alert alert-warning py-2">
-              <i class="bi bi-exclamation-triangle"></i> Admin account cannot be deleted from UI.
+              <i class="bi bi-exclamation-triangle"></i>
             </div>
           {% else %}
             <div class="alert alert-danger py-2">
@@ -363,13 +360,13 @@
 
         </div>
 
-      </div><!-- tab-content -->
-    </div><!-- acc-body -->
-  </div><!-- card -->
+      </div>
+    </div>
+  </div>
 
-</div><!-- shell -->
+</div>
 
-<!-- ===================== AVATAR MODAL ===================== -->
+<!-- AVATAR MODAL -->
 <div class="modal fade" id="avatarModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
@@ -380,7 +377,7 @@
 
       <form method="post" action="{{ url_for('account_avatar') }}" enctype="multipart/form-data">
         <div class="modal-body">
-          <div class="small text-muted mb-2">Choose JPG/PNG image (recommended square). Preview below:</div>
+          <div class="small text-muted mb-2">Choose JPG/PNG image. Preview below:</div>
           <input class="form-control" type="file" name="avatar" id="avatarInput" accept=".png,.jpg,.jpeg" required>
 
           <div class="mt-3 text-center">
@@ -402,7 +399,7 @@
   </div>
 </div>
 
-<!-- ===================== ADD EMAIL (LOCAL) MODAL ===================== -->
+<!-- ADD EMAIL MODAL -->
 <div class="modal fade" id="addEmailModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
@@ -412,7 +409,7 @@
       </div>
 
       <div class="modal-body">
-        <div class="small text-muted mb-2">This extra email is stored in your browser only (localStorage).</div>
+        <div class="small text-muted mb-2">This extra email is stored in your browser only .</div>
         <input id="extraEmailInput" class="form-control" type="email" placeholder="example@mail.com">
       </div>
 
@@ -426,7 +423,7 @@
   </div>
 </div>
 
-<!-- ===================== DELETE MODAL ===================== -->
+<!-- DELETE MODAL -->
 <div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content border border-danger">
@@ -528,7 +525,7 @@
     renderExtraEmails();
   });
 
-  // Edit mode toggle for DB-backed fields
+  // Edit mode toggle
   const editBtn = document.getElementById("editToggleBtn");
   const saveBtn = document.getElementById("saveProfileBtn");
   const cancelBtn = document.getElementById("cancelEditBtn");
@@ -570,12 +567,11 @@
   editBtn?.addEventListener("click", () => setEditing(!editing));
 
   cancelBtn?.addEventListener("click", () => {
-    // restore snapshot for DB-backed fields
     editable.forEach(el => { if(snapshot[el.name] !== undefined) el.value = snapshot[el.name]; });
     setEditing(false);
   });
 
-  // Save local prefs any time they change (even if you don't submit form)
+  // Save local prefs
   const saveLocal = (id, k) => {
     const el = document.getElementById(id);
     if(!el) return;

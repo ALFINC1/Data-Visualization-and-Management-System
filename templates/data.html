@@ -26,9 +26,10 @@
 
       <div class="d-flex gap-2 flex-wrap">
         {% if export_url is defined and export_url %}
-          {{ export_url }}
-            <i class="bi bi-download"></i> Export CSV
-          </a>
+        <button class="btn btn-outline-secondary btn-sm" type="button" onclick="downloadCurrentPageCSV()">
+          <i class="bi bi-download"></i> Export CSV
+        </button>
+          
         {% endif %}
 
         <button class="btn btn-outline-secondary btn-sm" type="button" onclick="copyShareLink()">
@@ -36,7 +37,7 @@
         </button>
 
         <button class="btn btn-outline-secondary btn-sm" type="button" onclick="downloadCurrentPageCSV()">
-          <i class="bi bi-file-earmark-spreadsheet"></i> Download Page CSV
+          <i class="bi bi-file-earmark-spreadsheet"></i> Download Page
         </button>
 
         <button class="btn btn-outline-secondary btn-sm" type="button" onclick="window.print()">
@@ -116,9 +117,9 @@
         <button class="btn btn-primary btn-sm" type="submit">
           <i class="bi bi-check2-circle"></i> Apply
         </button>
-        {{ request.path }}
+        <button class="btn btn-primary btn-sm" type="submit">
           <i class="bi bi-eraser"></i> Clear
-        </a>
+        </button>
       </div>
 
     </form>
@@ -193,14 +194,14 @@ function goToPage(){
   const p = parseInt(input.value || "1", 10);
   if(!p || p < 1) return;
 
-  // ✅ Professional + safe query handling (no &amp; bugs)
+ // safe query handling
   const url = new URL(window.location.href);
   url.searchParams.set("page", String(p));
   window.location.href = url.toString();
 }
 
 function downloadCurrentPageCSV(){
-  const table = document.getElementById("dvmsTable");
+  const table = document.getElementById("Data_Table");
   if(!table) return;
 
   let csv = [];

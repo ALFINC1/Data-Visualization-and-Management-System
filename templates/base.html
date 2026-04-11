@@ -11,7 +11,9 @@
   <style>
     :root{
       --brand-dark:#2f4b7c;
-      --brand-main:#3f6ad8;
+
+      --brand-main: {{ (app_settings.accent_color if app_settings is defined and app_settings.accent_color else '#3f6ad8') }};
+      --base-font-size: {{ (app_settings.base_font_size_px if app_settings is defined and app_settings.base_font_size_px else 14) }}px;
 
       --bg:#f4f6f9;
       --surface:#ffffff;
@@ -25,6 +27,9 @@
 
       --topbar-h:56px;
       --sidebar-w:240px;
+
+      --dvms-font: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      --user-font-scale: 1;
     }
 
     html[data-theme="dark"]{
@@ -39,18 +44,19 @@
       --shadow:0 2px 10px rgba(0,0,0,.35);
     }
 
+    html{ font-size: var(--base-font-size); }
+
     body{
       background:var(--bg);
       color:var(--text);
       margin:0;
-      font-size:14px;
       overflow-x:hidden;
+      font-family: var(--dvms-font);
+      font-size: calc(var(--base-font-size) * var(--user-font-scale));
     }
 
-    /* TOPBAR */
     .dvms-topbar{
-      position:fixed;
-      top:0; left:0; right:0;
+      position:fixed; top:0; left:0; right:0;
       height:var(--topbar-h);
       z-index:1050;
       background:#212529;
@@ -60,12 +66,9 @@
     }
     body:not(.sidebar-collapsed) .dvms-topbar{ margin-left:var(--sidebar-w); }
 
-    /* SIDEBAR */
     .dvms-sidebar{
-      position:fixed;
-      top:0; left:0;
-      height:100vh;
-      width:var(--sidebar-w);
+      position:fixed; top:0; left:0;
+      height:100vh; width:var(--sidebar-w);
       background:var(--brand-dark);
       z-index:1040;
       padding:1rem;
@@ -90,7 +93,6 @@
       color:#fff;
     }
 
-    /* MAIN */
     .dvms-main{
       padding-top:calc(var(--topbar-h) + 16px);
       padding-left:1.5rem;
@@ -101,7 +103,6 @@
     }
     body:not(.sidebar-collapsed) .dvms-main{ margin-left:var(--sidebar-w); }
 
-    /* Cards */
     .card{
       border:none;
       box-shadow:var(--shadow);
@@ -141,7 +142,6 @@
       border-color:var(--border);
     }
 
-    /* LOGIN PAGE */
     .login-shell{
       min-height:calc(100vh - var(--topbar-h));
       display:flex;
@@ -151,7 +151,6 @@
     }
     .login-wrap{ width:100%; max-width:520px; }
 
-    /* Footer */
     .dvms-footer{
       background:var(--brand-dark);
       color:#d6dbeb;
@@ -161,7 +160,6 @@
     body:not(.sidebar-collapsed) .dvms-footer{ margin-left:var(--sidebar-w); }
     .footer-inner{ padding:14px 0; text-align:center; font-size:12px; }
 
-    /* Footer icons */
     .footer-icons a{
       color:#d3d8e9;
       margin:0 8px;
@@ -174,6 +172,16 @@
       transform:translateY(-2px);
     }
 
+    .back-to-top{
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 2000;
+      display: none;
+      border-radius: 999px;
+      box-shadow: var(--shadow);
+    }
+
     body.login-page .dvms-topbar{ margin-left:0 !important; }
     body.login-page .dvms-main{ margin-left:0 !important; }
 
@@ -183,14 +191,26 @@
       body:not(.sidebar-collapsed) .dvms-footer{ margin-left:0; }
       .dvms-sidebar{ box-shadow:0 10px 30px rgba(0,0,0,.35); }
     }
+
+    body.density-compact .filter-bar { padding: 10px; }
+    body.density-compact .dvms-sidebar a { padding: 6px 10px; margin-bottom: 5px; }
+    body.density-compact .dvms-main { padding-left: 1rem; padding-right: 1rem; }
   </style>
 </head>
 
 <body class="{% if request.endpoint == 'login' %}login-page sidebar-collapsed{% endif %}">
-
-{# define block once, but do not render here #}
 {% if false %}{% block content %}{% endblock %}{% endif %}
 {% set is_login_page = (request.endpoint == 'login') %}
+
+{% set show_filters = (
+  request.path == '/' or
+  request.path.startswith('/bar') or
+  request.path.startswith('/line') or
+  request.path.startswith('/scatter') or
+  request.path.startswith('/heatmap') or
+  request.path.startswith('/pie') or
+  request.path.startswith('/data')
+) %}
 
 <nav class="dvms-topbar navbar navbar-dark">
   <div class="container-fluid d-flex align-items-center justify-content-between gap-2">
@@ -201,7 +221,7 @@
           <i class="bi bi-list"></i>
         </button>
       {% endif %}
-      <span class="navbar-brand mb-0">DVMS</span>
+      {% if title %}<span class="text-white-50 small ms-2 d-none d-md-inline"> {{ title }}</span>{% endif %}
     </div>
 
     <div class="d-flex align-items-center gap-2">
@@ -210,7 +230,7 @@
       </button>
 
       {% if user is defined and user %}
-        <span class="text-white small">{{ user }} ({{ role if role is defined else "viewer" }})</span>
+        <span class="text-white small">{{ user }}</span>
         <a class="btn btn-outline-light btn-sm" href="/logout">
           <i class="bi bi-box-arrow-right"></i> Logout
         </a>
@@ -233,9 +253,8 @@
       {% with msgs = get_flashed_messages(with_categories=true) %}
         {% if msgs %}
           {% for cat, msg in msgs %}
-            <div class="alert alert-{{ 'success' if cat=='success' else ('danger' if cat=='danger' else 'info') }} py-2">
-              {{ msg }}
-            </div>
+            {% set alert_cls = 'success' if cat=='success' else ('danger' if cat=='danger' else 'info') %}
+            <div class="alert alert-{{ alert_cls }} py-2">{{ msg }}</div>
           {% endfor %}
         {% endif %}
       {% endwith %}
@@ -245,11 +264,10 @@
 
 {% else %}
 
-  {# Preserve ALL query params across navigation #}
   {% set qs = request.query_string.decode('utf-8') %}
   {% set q = ('?' ~ qs) if qs else '' %}
 
-  <aside class="dvms-sidebar">
+  <aside class="dvms-sidebar" id="dvmsSidebar">
     <a href="/{{ q }}" class="{% if request.path == '/' %}active{% endif %}">Dashboard</a>
     <a href="/bar{{ q }}" class="{% if request.path.startswith('/bar') %}active{% endif %}">Bar Chart</a>
     <a href="/line{{ q }}" class="{% if request.path.startswith('/line') %}active{% endif %}">Line Chart</a>
@@ -257,160 +275,147 @@
     <a href="/heatmap{{ q }}" class="{% if request.path.startswith('/heatmap') %}active{% endif %}">Heatmap</a>
     <a href="/pie{{ q }}" class="{% if request.path.startswith('/pie') %}active{% endif %}">Pie</a>
     <a href="/data{{ q }}" class="{% if request.path.startswith('/data') %}active{% endif %}">Data</a>
-
-    <!-- ✅ NEW: Account endpoint -->
     <a href="/account{{ q }}" class="{% if request.path.startswith('/account') %}active{% endif %}">Account</a>
-
-    <!-- ✅ Rename to Data Profile (still /profile) -->
     <a href="/profile{{ q }}" class="{% if request.path.startswith('/profile') %}active{% endif %}">Data Profile</a>
+    <a href="/settings{{ q }}" class="{% if request.path.startswith('/settings') %}active{% endif %}">Settings</a>
   </aside>
 
-  <main class="dvms-main">
+  <main class="dvms-main" id="mainContent">
 
     {% with msgs = get_flashed_messages(with_categories=true) %}
       {% if msgs %}
         {% for cat, msg in msgs %}
-          <div class="alert alert-{{ 'success' if cat=='success' else ('danger' if cat=='danger' else 'info') }} py-2">
-            {{ msg }}
-          </div>
+          {% set alert_cls = 'success' if cat=='success' else ('danger' if cat=='danger' else 'info') %}
+          <div class="alert alert-{{ alert_cls }} py-2">{{ msg }}</div>
         {% endfor %}
       {% endif %}
     {% endwith %}
 
-    <div class="filter-bar">
-      <div class="filter-title">
-        <i class="bi bi-funnel"></i> Filters &amp; Controls
-        <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" onclick="toggleFilters()">Toggle</button>
-      </div>
-
-      <div id="filtersPanel">
-        <form class="row g-2 align-items-end" method="get" action="{{ request.path }}">
-
-          {% if request.args.get('search') %}<input type="hidden" name="search" value="{{ request.args.get('search') }}">{% endif %}
-          {% if request.args.get('sort') %}<input type="hidden" name="sort" value="{{ request.args.get('sort') }}">{% endif %}
-          {% if request.args.get('order') %}<input type="hidden" name="order" value="{{ request.args.get('order') }}">{% endif %}
-          <input type="hidden" name="page" value="1">
-
-          <div class="col-md-3">
-            <label class="form-label small text-muted mb-1">Category</label>
-            <select name="category" class="form-select form-select-sm">
-              <option value="">All</option>
-              {% if categories is defined and categories %}
-                {% for c in categories %}
-                  <option value="{{ c }}" {% if filters is defined and filters.category == c %}selected{% endif %}>{{ c }}</option>
-                {% endfor %}
-              {% endif %}
-            </select>
-          </div>
-
-          <div class="col-md-3">
-            <label class="form-label small text-muted mb-1">Date</label>
-            <select name="date" class="form-select form-select-sm">
-              <option value="">All</option>
-              {% if date_values is defined and date_values %}
-                {% for d in date_values %}
-                  <option value="{{ d }}" {% if filters is defined and filters.date == d %}selected{% endif %}>{{ d }}</option>
-                {% endfor %}
-              {% endif %}
-            </select>
-          </div>
-
-          <div class="col-md-2">
-            <label class="form-label small text-muted mb-1">Min</label>
-            <input type="number" step="any" name="min" class="form-control form-control-sm"
-                   value="{% if filters is defined %}{{ filters.min }}{% endif %}">
-          </div>
-
-          <div class="col-md-2">
-            <label class="form-label small text-muted mb-1">Max</label>
-            <input type="number" step="any" name="max" class="form-control form-control-sm"
-                   value="{% if filters is defined %}{{ filters.max }}{% endif %}">
-          </div>
-
-          <div class="col-md-2 d-grid gap-2">
-            <button class="btn btn-primary btn-sm" type="submit">Apply</button>
-            <a class="btn btn-outline-secondary btn-sm" href="{{ request.path }}">Clear</a>
-          </div>
-
-          <div class="col-12 mt-2 d-flex gap-2 flex-wrap align-items-center">
-            {% if export_url is defined and export_url %}
-              <a class="btn btn-outline-primary btn-sm" href="{{ export_url }}">
-                <i class="bi bi-download"></i> Export CSV
-              </a>
-            {% endif %}
-
-            <a class="btn btn-outline-danger btn-sm" href="/export/report.pdf{% if qs %}?{{ qs }}{% endif %}">
-              <i class="bi bi-filetype-pdf"></i> Export PDF
-            </a>
-
-            <button class="btn btn-outline-secondary btn-sm" type="button" onclick="copyShareLink()">
-              <i class="bi bi-link-45deg"></i> Copy Link
-            </button>
-
-            <span class="small text-muted">
-              Dataset: <strong>{{ active_data_path if active_data_path is defined else "default" }}</strong>
-              {% if role is defined and role == "admin" %}
-                &nbsp;|&nbsp;<a class="text-decoration-none" href="/dataset/reset">Reset</a>
-              {% endif %}
-            </span>
-          </div>
-        </form>
-
-        {% if role is defined and role == "admin" %}
-        <div class="mt-3">
-          <div class="small text-muted mb-1"><i class="bi bi-upload"></i> Upload Dataset (CSV/XLS/XLSX)</div>
-          <form action="/upload" method="post" enctype="multipart/form-data" class="d-flex gap-2">
-            <input class="form-control form-control-sm" type="file" name="file" required>
-            <button class="btn btn-success btn-sm" type="submit">Upload</button>
-          </form>
+    {% if show_filters %}
+      <div class="filter-bar">
+        <div class="filter-title">
+          <i class="bi bi-funnel"></i> Filters &amp; Controls
+          <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" onclick="toggleFilters()">Toggle</button>
         </div>
-        {% endif %}
 
-        <div class="mt-3">
-          <div class="small text-muted mb-1"><i class="bi bi-bookmark-star"></i> Saved Views (Presets)</div>
+        <div id="filtersPanel">
+          <form class="row g-2 align-items-end" method="get" action="{{ request.path }}">
+
+            {% if request.args.get('search') %}<input type="hidden" name="search" value="{{ request.args.get('search') }}">{% endif %}
+            {% if request.args.get('sort') %}<input type="hidden" name="sort" value="{{ request.args.get('sort') }}">{% endif %}
+            {% if request.args.get('order') %}<input type="hidden" name="order" value="{{ request.args.get('order') }}">{% endif %}
+            <input type="hidden" name="page" value="1">
+
+            <div class="col-md-3">
+              <label class="form-label small text-muted mb-1">Category</label>
+              <select name="category" class="form-select form-select-sm">
+                <option value="">All</option>
+                {% if categories is defined and categories %}
+                  {% for c in categories %}
+                    <option value="{{ c }}" {% if filters is defined and filters.category == c %}selected{% endif %}>{{ c }}</option>
+                  {% endfor %}
+                {% endif %}
+              </select>
+            </div>
+
+            <div class="col-md-3">
+              <label class="form-label small text-muted mb-1">Date</label>
+              <select name="date" class="form-select form-select-sm">
+                <option value="">All</option>
+                {% if date_values is defined and date_values %}
+                  {% for d in date_values %}
+                    <option value="{{ d }}" {% if filters is defined and filters.date == d %}selected{% endif %}>{{ d }}</option>
+                  {% endfor %}
+                {% endif %}
+              </select>
+            </div>
+
+            <div class="col-md-2">
+              <label class="form-label small text-muted mb-1">Min</label>
+              <input type="number" step="any" name="min" class="form-control form-control-sm"
+                     value="{% if filters is defined %}{{ filters.min }}{% endif %}">
+            </div>
+
+            <div class="col-md-2">
+              <label class="form-label small text-muted mb-1">Max</label>
+              <input type="number" step="any" name="max" class="form-control form-control-sm"
+                     value="{% if filters is defined %}{{ filters.max }}{% endif %}">
+            </div>
+
+            <div class="col-md-2 d-grid gap-2">
+              <button class="btn btn-primary btn-sm" type="submit">Apply</button>
+              <a class="btn btn-outline-secondary btn-sm" href="{{ request.path }}">Clear</a>
+            </div>
+
+          </form>
 
           {% if role is defined and role == "admin" %}
-          <form action="/presets/save" method="post" class="d-flex gap-2">
-            <input type="hidden" name="url" value="{{ share_url|default(request.url) }}">
-            <input class="form-control form-control-sm" name="name" placeholder="Preset name" required>
-            <button class="btn btn-primary btn-sm" type="submit">Save</button>
-          </form>
+          <div class="mt-3">
+            <div class="small text-muted mb-1"><i class="bi bi-upload"></i> Upload Dataset</div>
+            <form action="/upload" method="post" enctype="multipart/form-data" class="d-flex gap-2">
+              <input class="form-control form-control-sm" type="file" name="file" required>
+              <button class="btn btn-success btn-sm" type="submit">Upload</button>
+            </form>
+          </div>
           {% endif %}
 
-          {% if presets is defined and presets %}
-            <div class="mt-2 d-flex gap-2 flex-wrap">
-              {% for p in presets[:8] %}
-                <a class="btn btn-outline-secondary btn-sm" href="/presets/apply/{{ p.id }}">{{ p.name }}</a>
-                {% if role is defined and role == "admin" %}
-                  <a class="btn btn-outline-danger btn-sm" href="/presets/delete/{{ p.id }}">
-                    <i class="bi bi-trash"></i>
-                  </a>
-                {% endif %}
-              {% endfor %}
-            </div>
-          {% endif %}
         </div>
-
       </div>
-    </div>
+    {% endif %}
 
     {{ self.content() }}
   </main>
 
   <footer class="dvms-footer">
     <div class="footer-inner">
-      © <span id="year"></span> by Fadil Ahmed
+      © <span id="year"></span> {{ (app_settings.developer_name if app_settings is defined and app_settings.developer_name else "Fadil Ahmed") }}
       <span class="footer-icons ms-2">
-        <a href="https://www.linkedin.com/in/fadilahmed123" target="_blank" aria-label="LinkedIn"><i class="bi bi-linkedin"></i></a>
-        <a href="https://github.com/ALFINC1" target="_blank" aria-label="GitHub"><i class="bi bi-github"></i></a>
-        <a href="https://t.me/ALFINC1" target="_blank" aria-label="Telegram"><i class="bi bi-telegram"></i></a>
+        <a href="{{ (app_settings.social_links.linkedin if app_settings is defined and app_settings.social_links is defined else 'https://www.linkedin.com/in/fadilahmed123') }}" target="_blank" aria-label="LinkedIn">
+          <i class="bi bi-linkedin"></i>
+        </a>
+        <a href="{{ (app_settings.social_links.github if app_settings is defined and app_settings.social_links is defined else 'https://github.com/ALFINC1') }}" target="_blank" aria-label="GitHub">
+          <i class="bi bi-github"></i>
+        </a>
+        <a href="{{ (app_settings.social_links.telegram if app_settings is defined and app_settings.social_links is defined else 'https://t.me/ALFINC1') }}" target="_blank" aria-label="Telegram">
+          <i class="bi bi-telegram"></i>
+        </a>
       </span>
     </div>
   </footer>
 
+  <button id="backToTop" class="btn btn-primary back-to-top" type="button" aria-label="Back to top">
+    <i class="bi bi-arrow-up"></i>
+  </button>
+
 {% endif %}
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+(function(){
+  const root = document.documentElement;
+
+  const appFont = "{{ app_settings.font_family if app_settings is defined else 'system' }}";
+  const customStack = "{{ app_settings.custom_font_stack if app_settings is defined else '' }}";
+
+  let stack = "system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+  if(appFont === "serif") stack = "ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif";
+  if(appFont === "mono") stack = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace";
+  if(appFont === "custom" && customStack.trim()) stack = customStack;
+
+  root.style.setProperty("--dvms-font", stack);
+
+  const userScale = {{ (user_settings.font_scale if user_settings is defined else 1.0) }};
+  if(userScale && userScale > 0){
+    root.style.setProperty("--user-font-scale", String(userScale));
+  }
+
+  const density = "{{ (user_settings.density if user_settings is defined else 'auto') }}";
+  const appDensity = "{{ (app_settings.density if app_settings is defined else 'comfortable') }}";
+  const finalDensity = (density && density !== "auto") ? density : appDensity;
+  document.body.classList.toggle("density-compact", finalDensity === "compact");
+})();
+</script>
 
 <script>
 function toggleSidebar(){
@@ -419,15 +424,6 @@ function toggleSidebar(){
     localStorage.setItem("dvms_sidebar", document.body.classList.contains("sidebar-collapsed") ? "1" : "0");
   } catch(e){}
 }
-
-(function(){
-  if(document.body.classList.contains("login-page")) return;
-  try {
-    if(localStorage.getItem("dvms_sidebar") === "1"){
-      document.body.classList.add("sidebar-collapsed");
-    }
-  } catch(e){}
-})();
 
 function toggleFilters(){
   const p = document.getElementById("filtersPanel");
@@ -444,10 +440,12 @@ function copyShareLink(){
     .catch(() => prompt("Copy this link:", link));
 }
 
-/* Dark mode */
 (function(){
   const btn = document.getElementById("themeToggle");
   const root = document.documentElement;
+
+  const userTheme = "{{ (user_settings.theme if user_settings is defined else 'auto') }}";
+  const appDefault = "{{ (app_settings.default_theme if app_settings is defined else 'light') }}";
 
   function setTheme(mode){
     root.setAttribute("data-theme", mode);
@@ -459,14 +457,20 @@ function copyShareLink(){
     }
   }
 
-  let saved = null;
-  try { saved = localStorage.getItem("dvms_theme"); } catch(e){}
-  if(saved){
-    setTheme(saved);
-  } else {
+  function computeInitialTheme(){
+    if(userTheme === "light" || userTheme === "dark") return userTheme;
+
+    let saved = null;
+    try { saved = localStorage.getItem("dvms_theme"); } catch(e){}
+    if(saved === "light" || saved === "dark") return saved;
+
     const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-    setTheme(prefersDark ? "dark" : "light");
+    if(prefersDark) return "dark";
+
+    return (appDefault === "dark") ? "dark" : "light";
   }
+
+  setTheme(computeInitialTheme());
 
   if(btn){
     btn.addEventListener("click", () => {
@@ -474,6 +478,15 @@ function copyShareLink(){
       setTheme(current === "dark" ? "light" : "dark");
     });
   }
+})();
+
+(function(){
+  const btn = document.getElementById("backToTop");
+  if(!btn) return;
+  window.addEventListener("scroll", () => {
+    btn.style.display = (window.scrollY > 350) ? "inline-flex" : "none";
+  });
+  btn.addEventListener("click", () => window.scrollTo({top:0, behavior:"smooth"}));
 })();
 </script>
 
