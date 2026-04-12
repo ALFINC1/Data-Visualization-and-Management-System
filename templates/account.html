@@ -4,7 +4,7 @@
 {% set info = profile_info if profile_info is defined else {} %}
 {% set role_label = info.get('role', role if role is defined else 'viewer') %}
 {% set name = info.get('name', user if user is defined and user else 'Guest') %}
-{% set email = info.get('email', (user ~ '@dvms.local') if user is defined and user else 'dvms@local') %}
+{% set email = info.get('email') %}
 {% set phone = info.get('phone', '') %}
 {% set address = info.get('address', '') %}
 {% set status = info.get('status', 'Active') %}
@@ -101,11 +101,7 @@
         <i class="bi bi-link-45deg"></i> Copy Link
       </button>
 
-      <button class="btn btn-outline-secondary btn-sm acc-btn" type="button" onclick="downloadProfileJSON()">
-        <i class="bi bi-braces"></i> Download Profile JSON
-      </button>
-
-      <button id="editToggleBtn" class="btn btn-primary btn-sm acc-btn" type="button">
+      <button id="editToggleBtn" class="btn btn-outline-primary btn-sm acc-btn" type="button">
         <i class="bi bi-pencil-square"></i> Edit
       </button>
 
@@ -479,27 +475,6 @@
   updateStrength(); updateMatch();
 
 })();
-
-function downloadProfileJSON(){
-  const data = {
-    name: "{{ name|e }}",
-    email: "{{ email|e }}",
-    phone: "{{ phone|e }}",
-    address: "{{ address|e }}",
-    bio: "{{ bio|e }}",
-    role: "{{ role_label|e }}",
-    status: "{{ status|e }}"
-  };
-  const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "dvms_profile.json";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
 </script>
 
 {% endblock %}

@@ -1047,7 +1047,7 @@ def settings_page():
                 flash("Invalid JSON. Please paste valid settings JSON.", "danger")
                 return redirect(url_for("settings_page"))
 
-            # Merge imported -> 
+            # Merge imported
             merged = copy.deepcopy(DEFAULT_USER_SETTINGS)
             merged.update(obj)
 
@@ -1579,7 +1579,7 @@ def profile():
     missing = (df.isna().sum()).to_dict()
     dtypes = {c: str(df[c].dtype) for c in df.columns}
 
-    # Outliers (simple IQR method)
+    # Outliers
     outliers = {}
     for c in df.select_dtypes(include="number").columns:
         s = df[c].dropna()

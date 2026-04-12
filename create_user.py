@@ -9,7 +9,9 @@ def create_user(username, password, role):
     cur.execute("""
         INSERT OR REPLACE INTO users(username, password_hash, role)
         VALUES (?, ?, ?)
-    """, (username, generate_password_hash(password), role))
+    """, 
+    
+    (username, generate_password_hash(password), role))
     conn.commit()
     conn.close()
 
@@ -17,4 +19,4 @@ create_user("admin", "admin123", "admin")
 
 create_user("user1", "user123", "user")
 
-print("✅ Users created successfully")
+print(" Users created successfully")
