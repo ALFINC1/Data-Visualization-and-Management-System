@@ -62,20 +62,22 @@
       background:#212529;
       display:flex;
       align-items:center;
-      transition:margin-left .25s ease;
     }
-    body:not(.sidebar-collapsed) .dvms-topbar{ margin-left:var(--sidebar-w); }
 
-    /* SIDEBAR */
+    /* SIDEBAR (✅ fixed: starts under topbar) */
     .dvms-sidebar{
-      position:fixed; top:0; left:0;
-      height:100vh; width:var(--sidebar-w);
+      position:fixed;
+      top:var(--topbar-h);              /* ✅ moved down */
+      left:0;
+      height:calc(100vh - var(--topbar-h)); /* ✅ fit remaining height */
+      width:var(--sidebar-w);
       background:var(--brand-dark);
       z-index:1040;
       padding:1rem;
       overflow-y:auto;
       transition:transform .25s ease;
     }
+
     body.sidebar-collapsed .dvms-sidebar{
       transform:translateX(calc(-1 * var(--sidebar-w)));
     }
@@ -102,8 +104,9 @@
       padding-bottom:1.5rem;
       transition:margin-left .25s ease;
       min-height:100vh;
+      margin-left:var(--sidebar-w);
     }
-    body:not(.sidebar-collapsed) .dvms-main{ margin-left:var(--sidebar-w); }
+    body.sidebar-collapsed .dvms-main{ margin-left:0; }
 
     /* Cards */
     .card{
@@ -146,24 +149,28 @@
       border-color:var(--border);
     }
 
-    /* LOGIN */
+    /* Login layout */
     .login-shell{
       min-height:calc(100vh - var(--topbar-h));
       display:flex;
       justify-content:center;
       align-items:center;
       padding:1.5rem;
+      padding-top:calc(var(--topbar-h) + 16px);
     }
-    .login-wrap{ width:100%; max-width:640px; }
+    .login-wrap{ width:100%; max-width:720px; }
+
+    body.login-page .dvms-main{ margin-left:0 !important; }
 
     /* Footer */
     .dvms-footer{
       background:var(--brand-dark);
       color:#d6dbeb;
       border-top:1px solid rgba(255,255,255,.08);
+      margin-left:var(--sidebar-w);
       transition:margin-left .25s ease;
     }
-    body:not(.sidebar-collapsed) .dvms-footer{ margin-left:var(--sidebar-w); }
+    body.sidebar-collapsed .dvms-footer{ margin-left:0; }
     .footer-inner{ padding:14px 0; text-align:center; font-size:12px; }
 
     .footer-icons a{
@@ -203,14 +210,10 @@
       color:#fff;
     }
 
-    /* Login page */
-    body.login-page .dvms-topbar{ margin-left:0 !important; }
-    body.login-page .dvms-main{ margin-left:0 !important; }
-
+    /* Mobile */
     @media (max-width: 992px){
-      body:not(.sidebar-collapsed) .dvms-topbar{ margin-left:0; }
-      body:not(.sidebar-collapsed) .dvms-main{ margin-left:0; }
-      body:not(.sidebar-collapsed) .dvms-footer{ margin-left:0; }
+      .dvms-main{ margin-left:0; }
+      .dvms-footer{ margin-left:0; }
       .dvms-sidebar{ box-shadow:0 10px 30px rgba(0,0,0,.35); }
     }
 
@@ -224,7 +227,17 @@
 {% if false %}{% block content %}{% endblock %}{% endif %}
 {% set is_login_page = (request.endpoint == 'login') %}
 
-{# Filters only on dashboard/charts/data #}
+{% macro render_flashes() %}
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% if msgs %}
+      {% for cat, msg in msgs %}
+        {% set alert_cls = {'success':'success','danger':'danger','warning':'warning'}.get(cat,'info') %}
+        <div class="alert alert-{{ alert_cls }} py-2 mb-2">{{ msg }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+{% endmacro %}
+
 {% set show_filters = (
   request.path == '/' or
   request.path.startswith('/bar') or
@@ -246,7 +259,7 @@
       {% endif %}
 
       <span class="navbar-brand mb-0">
-        {{ (app_settings.app_name if app_settings is defined and app_settings.app_name else "DVMS")}}
+        {{ (app_settings.app_name if app_settings is defined and app_settings.app_name else "DVMS") }}
       </span>
 
       {% if title %}
@@ -260,12 +273,11 @@
       </button>
 
       {% if user is defined and user %}
-        <!-- Profile dropdown -->
         <div class="dropdown">
           <button class="btn btn-outline-light btn-sm d-flex align-items-center gap-2"
                   type="button" data-bs-toggle="dropdown" aria-expanded="false">
             {% if nav_profile is defined and nav_profile and nav_profile.avatar_url %}
-              <img class="avatar-32" src="{{ nav_profile.avatar_url }}" alt="Profile">
+              <img class="avatar-32" src="{{ nav_profile.avatar_url }}" alt="Avatar">
             {% else %}
               <span class="avatar-fallback"><i class="bi bi-person"></i></span>
             {% endif %}
@@ -278,7 +290,7 @@
           <div class="dropdown-menu dropdown-menu-end p-3" style="min-width:280px;">
             <div class="d-flex gap-3 align-items-center">
               {% if nav_profile is defined and nav_profile and nav_profile.avatar_url %}
-                <img class="avatar-32" src="{{ nav_profile.avatar_url }}" alt="Profile">
+                <img class="avatar-32" src="{{ nav_profile.avatar_url }}" alt="Avatar">
               {% else %}
                 <span class="avatar-fallback"><i class="bi bi-person"></i></span>
               {% endif %}
@@ -302,19 +314,18 @@
             <hr class="my-2">
 
             <div class="d-grid gap-2">
-              <a class="btn btn-outline-secondary btn-sm" href="/account">
+              <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('account') }}">
                 <i class="bi bi-person-gear"></i> Account
               </a>
-              <a class="btn btn-outline-danger btn-sm" href="/logout">
+              <a class="btn btn-outline-danger btn-sm" href="{{ url_for('logout') }}">
                 <i class="bi bi-box-arrow-right"></i> Logout
               </a>
             </div>
           </div>
         </div>
-
       {% else %}
         {% if not is_login_page %}
-          <a class="btn btn-outline-light btn-sm" href="/login">
+          <a class="btn btn-outline-light btn-sm" href="{{ url_for('login') }}">
             <i class="bi bi-box-arrow-in-right"></i> Login
           </a>
         {% endif %}
@@ -325,26 +336,13 @@
 </nav>
 
 {% if is_login_page %}
-
   <div class="login-shell">
     <div class="login-wrap">
-
-      <!-- Flash messages on login page -->
-      {% with msgs = get_flashed_messages(with_categories=true) %}
-        {% if msgs %}
-          {% for cat, msg in msgs %}
-            {% set alert_cls = {'success':'success','danger':'danger','warning':'warning'}.get(cat,'info') %}
-            <div class="alert alert-{{ alert_cls }} py-2">{{ msg }}</div>
-          {% endfor %}
-        {% endif %}
-      {% endwith %}
-
+      {{ render_flashes() }}
       {{ self.content() }}
     </div>
   </div>
-
 {% else %}
-
   {% set qs = request.query_string.decode('utf-8') %}
   {% set q = ('?' ~ qs) if qs else '' %}
 
@@ -357,21 +355,11 @@
     <a href="/pie{{ q }}" class="{% if request.path.startswith('/pie') %}active{% endif %}">Pie</a>
     <a href="/data{{ q }}" class="{% if request.path.startswith('/data') %}active{% endif %}">Data</a>
     <a href="/account{{ q }}" class="{% if request.path.startswith('/account') %}active{% endif %}">Account</a>
-
     <a href="/settings{{ q }}" class="{% if request.path.startswith('/settings') %}active{% endif %}">Settings</a>
   </aside>
 
   <main class="dvms-main" id="mainContent">
-
-    <!-- Flash messages on all other pages -->
-    {% with msgs = get_flashed_messages(with_categories=true) %}
-      {% if msgs %}
-        {% for cat, msg in msgs %}
-          {% set alert_cls = {'success':'success','danger':'danger','warning':'warning'}.get(cat,'info') %}
-          <div class="alert alert-{{ alert_cls }} py-2">{{ msg }}</div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
+    {{ render_flashes() }}
 
     {% if show_filters %}
       <div class="filter-bar">
@@ -382,7 +370,6 @@
 
         <div id="filtersPanel">
           <form class="row g-2 align-items-end" method="get" action="{{ request.path }}">
-
             {% if request.args.get('search') %}<input type="hidden" name="search" value="{{ request.args.get('search') }}">{% endif %}
             {% if request.args.get('sort') %}<input type="hidden" name="sort" value="{{ request.args.get('sort') }}">{% endif %}
             {% if request.args.get('order') %}<input type="hidden" name="order" value="{{ request.args.get('order') }}">{% endif %}
@@ -414,14 +401,12 @@
 
             <div class="col-md-2">
               <label class="form-label small text-muted mb-1">Min</label>
-              <input type="number" step="any" name="min" class="form-control form-control-sm"
-                     value="{% if filters is defined %}{{ filters.min }}{% endif %}">
+              <input type="number" step="any" name="min" class="form-control form-control-sm" value="{{ filters.min if filters is defined else '' }}">
             </div>
 
             <div class="col-md-2">
               <label class="form-label small text-muted mb-1">Max</label>
-              <input type="number" step="any" name="max" class="form-control form-control-sm"
-                     value="{% if filters is defined %}{{ filters.max }}{% endif %}">
+              <input type="number" step="any" name="max" class="form-control form-control-sm" value="{{ filters.max if filters is defined else '' }}">
             </div>
 
             <div class="col-md-2 d-grid gap-2">
@@ -429,17 +414,6 @@
               <a class="btn btn-outline-secondary btn-sm" href="{{ request.path }}">Clear</a>
             </div>
           </form>
-
-          {% if role is defined and role == "admin" %}
-          <div class="mt-3">
-            <div class="small text-muted mb-1"><i class="bi bi-upload"></i> Upload Dataset</div>
-            <form action="/upload" method="post" enctype="multipart/form-data" class="d-flex gap-2">
-              <input class="form-control form-control-sm" type="file" name="file" required>
-              <button class="btn btn-success btn-sm" type="submit">Upload</button>
-            </form>
-          </div>
-          {% endif %}
-
         </div>
       </div>
     {% endif %}
@@ -450,15 +424,15 @@
   <footer class="dvms-footer">
     <div class="footer-inner">
       © <span id="year"></span>
-      {{ (app_settings.developer_name if app_settings is defined and app_settings.developer_name else "Fadil Ahmed") }}
+      {{ (app_settings.developer_name if app_settings is defined and app_settings.developer_name else "DVMS") }}
       <span class="footer-icons ms-2">
-        <a href="{{ (app_settings.social_links.linkedin if app_settings is defined and app_settings.social_links is defined else 'https://www.linkedin.com/in/fadilahmed123') }}" target="_blank" aria-label="LinkedIn">
+        <a href="{{ (app_settings.social_links.linkedin if app_settings is defined and app_settings.social_links is defined else 'https://www.linkedin.com/') }}" target="_blank" aria-label="LinkedIn">
           <i class="bi bi-linkedin"></i>
         </a>
-        <a href="{{ (app_settings.social_links.github if app_settings is defined and app_settings.social_links is defined else 'https://github.com/ALFINC1') }}" target="_blank" aria-label="GitHub">
+        <a href="{{ (app_settings.social_links.github if app_settings is defined and app_settings.social_links is defined else 'https://github.com/') }}" target="_blank" aria-label="GitHub">
           <i class="bi bi-github"></i>
         </a>
-        <a href="{{ (app_settings.social_links.telegram if app_settings is defined and app_settings.social_links is defined else 'https://t.me/ALFINC1') }}" target="_blank" aria-label="Telegram">
+        <a href="{{ (app_settings.social_links.telegram if app_settings is defined and app_settings.social_links is defined else 'https://t.me/') }}" target="_blank" aria-label="Telegram">
           <i class="bi bi-telegram"></i>
         </a>
       </span>
@@ -468,13 +442,11 @@
   <button id="backToTop" class="btn btn-primary back-to-top" type="button" aria-label="Back to top">
     <i class="bi bi-arrow-up"></i>
   </button>
-
 {% endif %}
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-/* Apply font + user scale + density */
 (function(){
   const root = document.documentElement;
 
@@ -515,13 +487,6 @@ function toggleFilters(){
 const y = document.getElementById("year");
 if (y) y.textContent = new Date().getFullYear();
 
-function copyShareLink(){
-  const link = "{{ share_url|default(request.url) }}";
-  navigator.clipboard.writeText(link).then(() => alert("Link copied!"))
-    .catch(() => prompt("Copy this link:", link));
-}
-
-/* Theme */
 (function(){
   const btn = document.getElementById("themeToggle");
   const root = document.documentElement;
@@ -541,14 +506,11 @@ function copyShareLink(){
 
   function computeInitialTheme(){
     if(userTheme === "light" || userTheme === "dark") return userTheme;
-
     let saved = null;
     try { saved = localStorage.getItem("dvms_theme"); } catch(e){}
     if(saved === "light" || saved === "dark") return saved;
-
     const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
     if(prefersDark) return "dark";
-
     return (appDefault === "dark") ? "dark" : "light";
   }
 
@@ -562,7 +524,6 @@ function copyShareLink(){
   }
 })();
 
-/* Back to top */
 (function(){
   const btn = document.getElementById("backToTop");
   if(!btn) return;
