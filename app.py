@@ -28,14 +28,12 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 from settings import DEFAULT_APP_SETTINGS, DEFAULT_USER_SETTINGS
 from service.service import DataService
-from datetime import timedelta
 
 
 # APP
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "dvms-dev-secret")
 app.permanent_session_lifetime = timedelta(days=30)
-
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -67,6 +65,7 @@ def init_dirs():
     os.makedirs(STORAGE_DIR, exist_ok=True)
     os.makedirs(STATIC_DIR, exist_ok=True)
     os.makedirs(os.path.join(STATIC_DIR, "avatars"), exist_ok=True)
+    os.makedirs(os.path.join(STATIC_DIR, "covers"), exist_ok=True)
 
 
 def db():
@@ -98,10 +97,40 @@ def qident(name: str) -> str:
     return '"' + str(name).replace('"', '""') + '"'
 
 
+def _static_url_to_path(static_url: str) -> str:
+   
+    if not static_url:
+        return ""
+    u = str(static_url).strip()
+    if "/static/" in u:
+        u = u.split("/static/", 1)[1]
+        return os.path.join(STATIC_DIR, u.replace("/", os.sep))
+    if u.startswith("avatars/") or u.startswith("covers/"):
+        return os.path.join(STATIC_DIR, u.replace("/", os.sep))
+    return ""
+
+
+def _safe_delete_file(path: str) -> bool:
+    if not path:
+        return False
+    try:
+        abs_static = os.path.abspath(STATIC_DIR)
+        abs_path = os.path.abspath(path)
+        if not abs_path.startswith(abs_static):
+            return False
+        if os.path.exists(abs_path) and os.path.isfile(abs_path):
+            os.remove(abs_path)
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def init_db():
     init_dirs()
     connection = db()
     try:
+        # Users
         connection.execute("""
             CREATE TABLE IF NOT EXISTS users(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -111,6 +140,7 @@ def init_db():
             )
         """)
 
+        # Presets
         connection.execute("""
             CREATE TABLE IF NOT EXISTS presets(
                 id TEXT PRIMARY KEY,
@@ -121,6 +151,7 @@ def init_db():
             )
         """)
 
+        # Meta
         connection.execute(f"""
             CREATE TABLE IF NOT EXISTS {META_TABLE}(
                 k TEXT PRIMARY KEY,
@@ -128,6 +159,7 @@ def init_db():
             )
         """)
 
+        # Profiles 
         connection.execute("""
             CREATE TABLE IF NOT EXISTS user_profiles(
                 username TEXT PRIMARY KEY,
@@ -138,12 +170,35 @@ def init_db():
                 phone TEXT,
                 sex TEXT,
                 birthdate TEXT,
+
                 address TEXT,
                 bio TEXT,
+
                 avatar_path TEXT,
+                cover_path TEXT,
+
+                website TEXT,
+                linkedin TEXT,
+                github TEXT,
+                telegram TEXT,
+
                 updated_at INTEGER
             )
         """)
+
+        # Migrations for older DBs
+        ensure_columns(connection, "user_profiles", {
+            "first_name": "TEXT",
+            "last_name": "TEXT",
+            "sex": "TEXT",
+            "birthdate": "TEXT",
+            "avatar_path": "TEXT",
+            "cover_path": "TEXT",
+            "website": "TEXT",
+            "linkedin": "TEXT",
+            "github": "TEXT",
+            "telegram": "TEXT"
+        })
 
         # User settings
         connection.execute("""
@@ -165,14 +220,6 @@ def init_db():
             )
         """)
 
-        # Safe migrations 
-        ensure_columns(connection, "user_profiles", {
-            "first_name": "TEXT",
-            "last_name": "TEXT",
-            "sex": "TEXT",
-            "birthdate": "TEXT"
-        })
-
         connection.commit()
 
         # Ensure admin exists
@@ -184,9 +231,9 @@ def init_db():
             )
             connection.commit()
             logger.info("Admin account created (change ADMIN_PASSWORD env for security).")
+
     finally:
         connection.close()
-
 
 # META
 def meta_get(key: str, default=None):
@@ -211,7 +258,7 @@ def meta_set(key: str, value: str):
         connection.close()
 
 
-#  SETTINGS HELPERS 
+# SETTINGS HELPERS
 def _safe_json_load(s, default):
     try:
         return json.loads(s) if s else copy.deepcopy(default)
@@ -226,11 +273,9 @@ def get_app_settings():
     merged = copy.deepcopy(DEFAULT_APP_SETTINGS)
     merged.update(data or {})
 
-    # nested merge
     if "social_links" in DEFAULT_APP_SETTINGS:
         merged["social_links"] = copy.deepcopy(DEFAULT_APP_SETTINGS["social_links"])
         merged["social_links"].update((data or {}).get("social_links", {}) or {})
-
     return merged
 
 
@@ -269,7 +314,7 @@ def set_user_settings(username: str, settings_dict):
         conn.close()
 
 
-# ---------- AUTH HELPERS ----------
+# AUTH HELPERS
 def current_user():
     return session.get("user") if has_request_context() else None
 
@@ -308,8 +353,6 @@ def active_data_path():
 def import_to_sqlite(path: str):
     ds = DataService(path)
     df = ds.load_df().copy()
-
-    # normalize columns
     df.columns = [str(c).strip().replace(" ", "_") for c in df.columns]
 
     connection = db()
@@ -392,7 +435,6 @@ def build_where(x_col, y_col, date_col, scatter_cols=None):
         where.append(f"CAST({qident(date_col)} AS TEXT) = ?")
         params.append(date_val)
 
-    # numeric range
     if scatter_cols and len(scatter_cols) >= 2:
         a, b = scatter_cols[0], scatter_cols[1]
         if mn is not None:
@@ -410,7 +452,6 @@ def build_where(x_col, y_col, date_col, scatter_cols=None):
                 where.append(f"{qident(y_col)} <= ?")
                 params.append(mx)
 
-    # search across all columns
     if search:
         cols = get_columns()
         parts = []
@@ -493,46 +534,6 @@ def compute_kpis(where_clause, params, x_col, y_col):
     }
 
 
-# HEATMAP PNG
-def save_heatmap_png(df_any, out_path, title="Correlation Heatmap", small=True):
-    plt.close("all")
-    num_df = df_any.select_dtypes(include="number").dropna(axis=1, how="all")
-
-    if not num_df.empty:
-        nunique = num_df.nunique(dropna=True)
-        num_df = num_df.loc[:, nunique > 1]
-
-    if num_df.shape[1] < 2:
-        plt.figure(figsize=(4, 3) if small else (10, 8))
-        plt.axis("off")
-        plt.text(0.5, 0.5, "Not enough numeric columns\nfor correlation heatmap",
-                 ha="center", va="center", fontsize=10)
-        plt.tight_layout()
-        plt.savefig(out_path, dpi=140, bbox_inches="tight")
-        plt.close()
-        return
-
-    corr = num_df.corr()
-    if corr.isna().all().all():
-        plt.figure(figsize=(4, 3) if small else (10, 8))
-        plt.axis("off")
-        plt.text(0.5, 0.5, "Correlation could not be computed\n(check numeric data)",
-                 ha="center", va="center", fontsize=10)
-        plt.tight_layout()
-        plt.savefig(out_path, dpi=140, bbox_inches="tight")
-        plt.close()
-        return
-
-    plt.figure(figsize=(4.8, 3.2) if small else (10, 8))
-    ax = sns.heatmap(corr, cmap="coolwarm", annot=False, square=True, linewidths=0.5, cbar=False)
-    ax.set_title(title, fontsize=10)
-    plt.xticks(rotation=ROTATION, ha="right", fontsize=FONT_SIZE)
-    plt.yticks(fontsize=FONT_SIZE)
-    plt.tight_layout(pad=0.3)
-    plt.savefig(out_path, dpi=140, bbox_inches="tight")
-    plt.close()
-
-
 # CONTEXT
 def base_context():
     x_col, y_col = pick_columns()
@@ -545,13 +546,14 @@ def base_context():
     finally:
         conn.close()
 
-    # Navbar profile
     nav_profile = None
     if current_user():
         conn2 = db()
         try:
-            p = conn2.execute("SELECT name, email, avatar_path FROM user_profiles WHERE username=?",
-                              (current_user(),)).fetchone()
+            p = conn2.execute(
+                "SELECT name, email, avatar_path FROM user_profiles WHERE username=?",
+                (current_user(),)
+            ).fetchone()
         finally:
             conn2.close()
 
@@ -584,7 +586,6 @@ def base_context():
         export_url=url_for("export_csv", **request.args.to_dict(flat=True))
     )
 
-
 # AUTH ROUTES
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -592,7 +593,6 @@ def login():
     ensure_dataset_imported()
 
     ctx = base_context()
-
     ctx["open_tab"] = "login"
     ctx["prefill_username"] = request.args.get("username", "")
 
@@ -603,12 +603,10 @@ def login():
 
         ctx["prefill_username"] = username
 
-        # Missing fields
         if not username or not password:
             flash("Please enter username and password.", "danger")
             return render_template("login.html", **ctx, title="Login")
 
-        # Lookup user
         conn = db()
         try:
             user_row = conn.execute(
@@ -618,18 +616,15 @@ def login():
         finally:
             conn.close()
 
-        # Account not found
         if not user_row:
             flash("Account does not exist. Please create an account.", "danger")
             ctx["open_tab"] = "register"
             return render_template("login.html", **ctx, title="Login")
 
-        # Wrong password
         if not check_password_hash(user_row["password_hash"], password):
             flash("Incorrect password. Please try again.", "danger")
             return render_template("login.html", **ctx, title="Login")
 
-        # Success
         session.clear()
         session["user"] = user_row["username"]
         session["role"] = user_row["role"]
@@ -638,7 +633,6 @@ def login():
         flash("Login successful. Welcome!", "success")
         return redirect(url_for("index"))
 
-    # GET
     return render_template("login.html", **ctx, title="Login")
 
 
@@ -698,7 +692,7 @@ def register():
     try:
         exists = connection.execute("SELECT username FROM users WHERE username=?", (username,)).fetchone()
         if exists:
-            flash("Username already exists. Try another.", "danger")
+            flash("Username already exists. Try another username.", "danger")
             return redirect(url_for("login") + "#register")
 
         connection.execute(
@@ -706,7 +700,6 @@ def register():
             (username, generate_password_hash(password), role)
         )
 
-        # Save
         connection.execute("""
             INSERT INTO user_profiles(username, name, first_name, last_name, email, phone, sex, birthdate, updated_at)
             VALUES(?,?,?,?,?,?,?,?,?)
@@ -825,7 +818,7 @@ def logout():
     return redirect(url_for("login"))
 
 
-# ACCOUNT 
+# ACCOUNT
 @app.route("/account")
 def account():
     init_db()
@@ -843,6 +836,11 @@ def account():
     address = ""
     bio = "Hi, Welcome to DVMS."
     avatar_url = ""
+    cover_url = ""
+    website = ""
+    linkedin = ""
+    github = ""
+    telegram = ""
 
     conn = db()
     try:
@@ -854,6 +852,11 @@ def account():
             address = prof["address"] or address
             bio = prof["bio"] or bio
             avatar_url = prof["avatar_path"] or ""
+            cover_url = prof["cover_path"] or ""
+            website = prof["website"] or ""
+            linkedin = prof["linkedin"] or ""
+            github = prof["github"] or ""
+            telegram = prof["telegram"] or ""
     finally:
         conn.close()
 
@@ -865,7 +868,12 @@ def account():
         "address": address,
         "status": "Active",
         "bio": bio,
-        "avatar_url": avatar_url
+        "avatar_url": avatar_url,
+        "cover_url": cover_url,
+        "website": website,
+        "linkedin": linkedin,
+        "github": github,
+        "telegram": telegram,
     })
     return render_template("account.html", **ctx, title="My Account")
 
@@ -884,19 +892,28 @@ def account_update():
     address = (request.form.get("address") or "").strip()
     bio = (request.form.get("bio") or "").strip()
 
+    website = (request.form.get("website") or "").strip()
+    linkedin = (request.form.get("linkedin") or "").strip()
+    github = (request.form.get("github") or "").strip()
+    telegram = (request.form.get("telegram") or "").strip()
+
     conn = db()
     try:
         conn.execute("""
-            INSERT INTO user_profiles(username, name, email, phone, address, bio, updated_at)
-            VALUES(?,?,?,?,?,?,?)
+            INSERT INTO user_profiles(username, name, email, phone, address, bio, website, linkedin, github, telegram, updated_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(username) DO UPDATE SET
                 name=excluded.name,
                 email=excluded.email,
                 phone=excluded.phone,
                 address=excluded.address,
                 bio=excluded.bio,
+                website=excluded.website,
+                linkedin=excluded.linkedin,
+                github=excluded.github,
+                telegram=excluded.telegram,
                 updated_at=excluded.updated_at
-        """, (username, name, email, phone, address, bio, int(time.time())))
+        """, (username, name, email, phone, address, bio, website, linkedin, github, telegram, int(time.time())))
         conn.commit()
     finally:
         conn.close()
@@ -918,18 +935,18 @@ def account_password():
 
     if len(new_pw) < 6:
         flash("New password must be at least 6 characters.", "danger")
-        return redirect(url_for("account") + "#security")
+        return redirect(url_for("account"))
 
     if new_pw != confirm_pw:
         flash("New passwords do not match.", "danger")
-        return redirect(url_for("account") + "#security")
+        return redirect(url_for("account"))
 
     conn = db()
     try:
         row = conn.execute("SELECT password_hash FROM users WHERE username=?", (current_user(),)).fetchone()
         if not row or not check_password_hash(row["password_hash"], current_pw):
             flash("Current password is incorrect.", "danger")
-            return redirect(url_for("account") + "#security")
+            return redirect(url_for("account"))
 
         conn.execute("UPDATE users SET password_hash=? WHERE username=?",
                      (generate_password_hash(new_pw), current_user()))
@@ -938,7 +955,7 @@ def account_password():
         conn.close()
 
     flash("Password updated successfully.", "success")
-    return redirect(url_for("account") + "#security")
+    return redirect(url_for("account"))
 
 
 @app.route("/account/avatar", methods=["POST"])
@@ -965,7 +982,12 @@ def account_avatar():
     public_url = url_for("static", filename=f"avatars/{filename}")
 
     conn = db()
+    old_path = ""
     try:
+        old = conn.execute("SELECT avatar_path FROM user_profiles WHERE username=?", (current_user(),)).fetchone()
+        old_url = old["avatar_path"] if old else ""
+        old_path = _static_url_to_path(old_url)
+
         conn.execute("""
             INSERT INTO user_profiles(username, avatar_path, updated_at)
             VALUES(?,?,?)
@@ -977,7 +999,118 @@ def account_avatar():
     finally:
         conn.close()
 
+    _safe_delete_file(old_path)
+
     flash("Profile image updated.", "success")
+    return redirect(url_for("account"))
+
+
+@app.route("/account/avatar/delete", methods=["POST"])
+def account_avatar_delete():
+    init_db()
+    ensure_dataset_imported()
+    if not login_required():
+        return redirect(url_for("login"))
+
+    conn = db()
+    old_path = ""
+    try:
+        row = conn.execute("SELECT avatar_path FROM user_profiles WHERE username=?", (current_user(),)).fetchone()
+        old_url = row["avatar_path"] if row else ""
+        old_path = _static_url_to_path(old_url)
+
+        conn.execute("""
+            INSERT INTO user_profiles(username, avatar_path, updated_at)
+            VALUES(?,?,?)
+            ON CONFLICT(username) DO UPDATE SET
+                avatar_path=excluded.avatar_path,
+                updated_at=excluded.updated_at
+        """, (current_user(), "", int(time.time())))
+        conn.commit()
+    finally:
+        conn.close()
+
+    _safe_delete_file(old_path)
+    flash("Profile picture removed.", "info")
+    return redirect(url_for("account"))
+
+
+@app.route("/account/cover", methods=["POST"])
+def account_cover_upload():
+    init_db()
+    ensure_dataset_imported()
+    if not login_required():
+        return redirect(url_for("login"))
+
+    f = request.files.get("cover")
+    if not f or f.filename.strip() == "":
+        flash("No cover image selected.", "danger")
+        return redirect(url_for("account"))
+
+    ext = os.path.splitext(f.filename)[1].lower()
+    if ext not in [".png", ".jpg", ".jpeg"]:
+        flash("Unsupported cover image type. Use PNG/JPG.", "danger")
+        return redirect(url_for("account"))
+
+    cover_dir = os.path.join(STATIC_DIR, "covers")
+    os.makedirs(cover_dir, exist_ok=True)
+
+    filename = f"{int(time.time())}_{secure_filename(f.filename)}"
+    save_path = os.path.join(cover_dir, filename)
+    f.save(save_path)
+
+    public_url = url_for("static", filename=f"covers/{filename}")
+
+    conn = db()
+    old_path = ""
+    try:
+        old = conn.execute("SELECT cover_path FROM user_profiles WHERE username=?", (current_user(),)).fetchone()
+        old_url = old["cover_path"] if old else ""
+        old_path = _static_url_to_path(old_url)
+
+        conn.execute("""
+            INSERT INTO user_profiles(username, cover_path, updated_at)
+            VALUES(?,?,?)
+            ON CONFLICT(username) DO UPDATE SET
+                cover_path=excluded.cover_path,
+                updated_at=excluded.updated_at
+        """, (current_user(), public_url, int(time.time())))
+        conn.commit()
+    finally:
+        conn.close()
+
+    _safe_delete_file(old_path)
+    flash("Cover image updated.", "success")
+    return redirect(url_for("account"))
+
+
+@app.route("/account/cover/delete", methods=["POST"])
+def account_cover_delete():
+    init_db()
+    ensure_dataset_imported()
+    if not login_required():
+        return redirect(url_for("login"))
+
+    conn = db()
+    old_path = ""
+    try:
+        row = conn.execute("SELECT cover_path FROM user_profiles WHERE username=?", (current_user(),)).fetchone()
+        old_url = row["cover_path"] if row else ""
+        old_path = _static_url_to_path(old_url)
+
+        conn.execute("""
+            INSERT INTO user_profiles(username, cover_path, updated_at)
+            VALUES(?,?,?)
+            ON CONFLICT(username) DO UPDATE SET
+                cover_path=excluded.cover_path,
+                updated_at=excluded.updated_at
+        """, (current_user(), "", int(time.time())))
+        conn.commit()
+    finally:
+        conn.close()
+
+    _safe_delete_file(old_path)
+    flash("Cover image removed.", "info")
     return redirect(url_for("account"))
 
 
@@ -990,18 +1123,19 @@ def account_delete():
 
     if current_role() == "admin":
         flash("Admin account cannot be deleted from UI.", "danger")
-        return redirect(url_for("account") + "#danger")
+        return redirect(url_for("account"))
 
     confirm = (request.form.get("confirm_text") or "").strip().upper()
     if confirm != "DELETE":
         flash("Type DELETE to confirm.", "danger")
-        return redirect(url_for("account") + "#danger")
+        return redirect(url_for("account"))
 
     username = current_user()
     conn = db()
     try:
         conn.execute("DELETE FROM user_profiles WHERE username=?", (username,))
         conn.execute("DELETE FROM user_settings WHERE username=?", (username,))
+        conn.execute("DELETE FROM password_resets WHERE username=?", (username,))
         conn.execute("DELETE FROM users WHERE username=?", (username,))
         conn.commit()
     finally:
@@ -1011,12 +1145,12 @@ def account_delete():
     flash("Account deleted.", "info")
     return redirect(url_for("login"))
 
-# SETTINGS 
+
+# SETTINGS
 @app.route("/settings", methods=["GET", "POST"])
 def settings_page():
     init_db()
     ensure_dataset_imported()
-
     if not login_required():
         return redirect(url_for("login"))
 
@@ -1026,104 +1160,24 @@ def settings_page():
     if request.method == "POST":
         scope = (request.form.get("scope") or "user").strip().lower()
 
-        # RESET MY SETTINGS
         if scope == "reset_user":
             set_user_settings(username, copy.deepcopy(DEFAULT_USER_SETTINGS))
             flash("Your settings were reset to defaults.", "info")
             return redirect(url_for("settings_page"))
 
-        # IMPORT MY SETTINGS
-        if scope == "import_user":
-            raw = (request.form.get("settings_json") or "").strip()
-            if not raw:
-                flash("Paste settings JSON to import.", "danger")
-                return redirect(url_for("settings_page"))
-
-            try:
-                obj = json.loads(raw)
-                if not isinstance(obj, dict):
-                    raise ValueError("Settings JSON must be an object/dictionary.")
-            except Exception:
-                flash("Invalid JSON. Please paste valid settings JSON.", "danger")
-                return redirect(url_for("settings_page"))
-
-            # Merge imported
-            merged = copy.deepcopy(DEFAULT_USER_SETTINGS)
-            merged.update(obj)
-
-            # Validate/clamp imported values
-            merged["theme"] = str(merged.get("theme", "auto")).strip()
-            if merged["theme"] not in ("auto", "light", "dark"):
-                merged["theme"] = "auto"
-
-            merged["density"] = str(merged.get("density", "auto")).strip()
-            if merged["density"] not in ("auto", "comfortable", "compact"):
-                merged["density"] = "auto"
-
-            try:
-                merged["font_scale"] = float(merged.get("font_scale", 1.0))
-            except:
-                merged["font_scale"] = 1.0
-            if merged["font_scale"] < 0.8:
-                merged["font_scale"] = 0.8
-            if merged["font_scale"] > 1.4:
-                merged["font_scale"] = 1.4
-
-            try:
-                merged["table_per_page"] = int(merged.get("table_per_page", 0))
-            except:
-                merged["table_per_page"] = 0
-            if merged["table_per_page"] < 0:
-                merged["table_per_page"] = 0
-            if merged["table_per_page"] > 200:
-                merged["table_per_page"] = 200
-
-            # New preference keys
-            merged["font_family"] = str(merged.get("font_family", "auto")).strip()
-            if merged["font_family"] not in ("auto", "system", "serif", "mono", "arial", "georgia", "courier", "custom"):
-                merged["font_family"] = "auto"
-
-            merged["custom_font_stack"] = str(merged.get("custom_font_stack", "")).strip()
-
-            merged["start_page"] = str(merged.get("start_page", "dashboard")).strip()
-            if merged["start_page"] not in ("dashboard", "data", "charts"):
-                merged["start_page"] = "dashboard"
-
-            merged["sidebar_default"] = str(merged.get("sidebar_default", "remember")).strip()
-            if merged["sidebar_default"] not in ("remember", "open", "collapsed"):
-                merged["sidebar_default"] = "remember"
-
-            merged["filters_panel"] = str(merged.get("filters_panel", "remember")).strip()
-            if merged["filters_panel"] not in ("remember", "open", "collapsed"):
-                merged["filters_panel"] = "remember"
-
-            merged["reduce_motion"] = str(merged.get("reduce_motion", "auto")).strip()
-            if merged["reduce_motion"] not in ("auto", "off", "on"):
-                merged["reduce_motion"] = "auto"
-
-            merged["high_contrast"] = str(merged.get("high_contrast", "off")).strip()
-            if merged["high_contrast"] not in ("off", "on"):
-                merged["high_contrast"] = "off"
-
-            set_user_settings(username, merged)
-            flash("Settings imported successfully.", "success")
-            return redirect(url_for("settings_page"))
-
-        # SAVE MY PREFERENCES
         if scope == "user":
             theme = (request.form.get("theme") or "auto").strip()
             density = (request.form.get("density") or "auto").strip()
 
-            # New fields
             font_family = (request.form.get("font_family") or "auto").strip()
             custom_font_stack = (request.form.get("custom_font_stack") or "").strip()
+
             start_page = (request.form.get("start_page") or "dashboard").strip()
             sidebar_default = (request.form.get("sidebar_default") or "remember").strip()
             filters_panel = (request.form.get("filters_panel") or "remember").strip()
             reduce_motion = (request.form.get("reduce_motion") or "auto").strip()
             high_contrast = (request.form.get("high_contrast") or "off").strip()
 
-            # Numeric
             try:
                 font_scale = float(request.form.get("font_scale") or 1.0)
             except:
@@ -1134,22 +1188,13 @@ def settings_page():
             except:
                 table_per_page = 0
 
-            # Validate/clamp
             if theme not in ("auto", "light", "dark"):
                 theme = "auto"
-
             if density not in ("auto", "comfortable", "compact"):
                 density = "auto"
 
-            if font_scale < 0.8:
-                font_scale = 0.8
-            if font_scale > 1.4:
-                font_scale = 1.4
-
-            if table_per_page < 0:
-                table_per_page = 0
-            if table_per_page > 200:
-                table_per_page = 200
+            font_scale = max(0.8, min(1.4, font_scale))
+            table_per_page = max(0, min(200, table_per_page))
 
             if font_family not in ("auto", "system", "serif", "mono", "arial", "georgia", "courier", "custom"):
                 font_family = "auto"
@@ -1169,14 +1214,12 @@ def settings_page():
             if high_contrast not in ("off", "on"):
                 high_contrast = "off"
 
-            # Save
             s = get_user_settings(username)
             s.update({
                 "theme": theme,
                 "density": density,
                 "font_scale": font_scale,
                 "table_per_page": table_per_page,
-
                 "font_family": font_family,
                 "custom_font_stack": custom_font_stack,
                 "start_page": start_page,
@@ -1194,6 +1237,7 @@ def settings_page():
         return redirect(url_for("settings_page"))
 
     return render_template("settings.html", **ctx, title="Settings")
+
 
 # UPLOAD
 @app.route("/upload", methods=["POST"])
@@ -1273,7 +1317,6 @@ def preset_apply(preset_id):
         p = conn.execute("SELECT * FROM presets WHERE id=?", (preset_id,)).fetchone()
     finally:
         conn.close()
-
     if not p:
         flash("Preset not found.", "danger")
         return redirect(url_for("index"))
@@ -1297,7 +1340,7 @@ def preset_delete(preset_id):
     return redirect(url_for("index"))
 
 
-# EXPORT CSV
+# EXPORT CSV 
 @app.route("/export/data.csv")
 def export_csv():
     ensure_dataset_imported()
@@ -1330,7 +1373,7 @@ def export_csv():
     )
 
 
-# EXPORT PDF 
+# EXPORT PDF
 @app.route("/export/report.pdf")
 def export_report_pdf():
     ensure_dataset_imported()
@@ -1386,7 +1429,6 @@ def api_chart(chart_type):
     ensure_dataset_imported()
 
     max_points = int(get_app_settings().get("chart_max_points", 5000))
-
     x_col, y_col = pick_columns()
     date_col = detect_date_column()
     where_clause, params = build_where(x_col, y_col, date_col)
@@ -1401,7 +1443,7 @@ def api_chart(chart_type):
         conn.close()
 
     if df.empty:
-        return jsonify({"error": "No data"}), 404
+        return jsonify({"error": "No data matches the selected filters."}), 404
 
     cols = df.columns.tolist()
 
@@ -1414,54 +1456,71 @@ def api_chart(chart_type):
         y_col = num_cols[0] if num_cols else None
 
     if not x_col:
-        return jsonify({"error": "No usable columns found for charting"}), 400
+        return jsonify({"error": "No usable columns found for charting."}), 400
+
+    # hardening
+    df.replace([np.inf, -np.inf], np.nan, inplace=True)
+    df[x_col] = df[x_col].astype(str).fillna("")
 
     try:
         if chart_type == "bar":
             if y_col:
-                g = df.groupby(x_col, dropna=False)[y_col].mean().sort_values(ascending=False).head(10).reset_index()
+                d2 = df[[x_col, y_col]].dropna()
+                if d2.empty:
+                    return jsonify({"error": "No numeric values available for bar chart."}), 400
+                g = d2.groupby(x_col, dropna=False)[y_col].mean().sort_values(ascending=False).head(12).reset_index()
                 fig = px.bar(g, x=x_col, y=y_col, title="Bar Chart (Mean)")
             else:
-                g = df[x_col].astype(str).value_counts().head(10).reset_index()
+                g = df[x_col].value_counts().head(12).reset_index()
                 g.columns = [x_col, "count"]
                 fig = px.bar(g, x=x_col, y="count", title="Bar Chart (Count)")
 
         elif chart_type == "line":
             if y_col:
-                g = df.groupby(x_col, dropna=False)[y_col].mean().reset_index()
+                d2 = df[[x_col, y_col]].dropna()
+                if d2.empty:
+                    return jsonify({"error": "No numeric values available for line chart."}), 400
+                top = d2[x_col].value_counts().head(20).index.tolist()
+                d2 = d2[d2[x_col].isin(top)]
+                g = d2.groupby(x_col, dropna=False)[y_col].mean().reset_index()
                 fig = px.line(g, x=x_col, y=y_col, title="Line Chart (Mean)")
             else:
-                g = df[x_col].astype(str).value_counts().reset_index()
+                g = df[x_col].value_counts().head(20).reset_index()
                 g.columns = [x_col, "count"]
                 fig = px.line(g, x=x_col, y="count", title="Line Chart (Count)")
 
         elif chart_type == "pie":
-            g = df[x_col].astype(str).value_counts().head(10).reset_index()
+            g = df[x_col].value_counts().head(12).reset_index()
             g.columns = [x_col, "count"]
             fig = px.pie(g, names=x_col, values="count", title="Pie Chart")
 
         elif chart_type == "scatter":
             nums = df.select_dtypes(include="number")
             if nums.shape[1] < 2:
-                return jsonify({"error": "Not enough numeric cols for scatter"}), 400
-            fig = px.scatter(df, x=nums.columns[0], y=nums.columns[1], title="Scatter Plot")
+                return jsonify({"error": "Not enough numeric columns for scatter plot."}), 400
+            a, b = nums.columns[0], nums.columns[1]
+            d2 = df[[a, b]].dropna()
+            if d2.empty:
+                return jsonify({"error": "No numeric pairs available for scatter plot."}), 400
+            fig = px.scatter(d2, x=a, y=b, title="Scatter Plot")
 
         elif chart_type == "heatmap":
             nums = df.select_dtypes(include="number").dropna(axis=1, how="all")
             if nums.shape[1] < 2:
-                return jsonify({"error": "Not enough numeric cols"}), 400
-
+                return jsonify({"error": "Not enough numeric columns for heatmap."}), 400
             nunique = nums.nunique(dropna=True)
             nums = nums.loc[:, nunique > 1]
             if nums.shape[1] < 2:
-                return jsonify({"error": "Numeric columns are constant; heatmap not possible"}), 400
-
+                return jsonify({"error": "Numeric columns constant; heatmap not possible."}), 400
             corr = nums.corr()
+            if corr.isna().all().all():
+                return jsonify({"error": "Correlation could not be computed."}), 400
             fig = px.imshow(corr, text_auto=False, title="Correlation Heatmap")
 
         else:
-            return jsonify({"error": "Unknown chart type"}), 400
+            return jsonify({"error": "Unknown chart type."}), 400
 
+        fig.update_layout(margin=dict(l=20, r=20, t=50, b=20))
         return Response(fig.to_json(), mimetype="application/json")
 
     except Exception as e:
@@ -1469,7 +1528,7 @@ def api_chart(chart_type):
         return jsonify({"error": f"Chart generation failed: {str(e)}"}), 500
 
 
-# DASHBOARD 
+# DASHBOARD
 @app.route("/")
 def index():
     init_db()
@@ -1485,25 +1544,19 @@ def index():
     ctx["kpis"] = compute_kpis(where_clause, params, x_col, y_col)
 
     df_plot = sample_df(limit=8000, where_clause=where_clause, params=params)
-    if df_plot.empty or not x_col or not y_col:
+    if df_plot.empty or not x_col:
         ctx["error"] = "No data matches the selected filters."
         return render_template("index.html", **ctx, title="Analytics Dashboard")
 
-    grouped = df_plot.groupby(x_col)[y_col].mean().sort_values(ascending=False).head(5)
+    ctx["top_categories"] = (
+        df_plot[x_col].astype(str).value_counts().head(6).index.tolist()
+        if x_col in df_plot.columns else []
+    )
 
-    bar_file = "dashboard_bar.png"
-    plt.figure(figsize=(4, 3))
-    plt.bar(grouped.index.astype(str), grouped.values, color="#3f6ad8")
-    plt.xticks(rotation=ROTATION, ha="right", fontsize=FONT_SIZE)
-    plt.tight_layout()
-    plt.savefig(os.path.join(STATIC_DIR, bar_file), dpi=130, bbox_inches="tight")
-    plt.close()
-
-    ctx["bar_url"] = url_for("static", filename=bar_file) + f"?v={int(time.time())}"
     return render_template("index.html", **ctx, title="Analytics Dashboard")
 
 
-# DATA TABLE 
+#  DATA TABLE
 @app.route("/data")
 def data():
     init_db()
@@ -1525,7 +1578,6 @@ def data():
     if sort_col and sort_col in cols:
         order_clause = f" ORDER BY {qident(sort_col)} {'DESC' if order == 'desc' else 'ASC'}"
 
-    # per-user table_per_page override
     app_s = get_app_settings()
     user_s = get_user_settings(current_user() or "")
     per_page = int(user_s.get("table_per_page") or 0) or int(app_s.get("table_per_page") or 15)
@@ -1549,17 +1601,11 @@ def data():
     finally:
         conn.close()
 
-    ctx.update(
-        columns=cols,
-        rows=df.values.tolist(),
-        page=page,
-        total=total,
-        per_page=per_page
-    )
+    ctx.update(columns=cols, rows=df.values.tolist(), page=page, total=total, per_page=per_page)
     return render_template("data.html", **ctx, title="Data")
 
 
-# PROFILE PAGE
+#  PROFILE PAGE
 @app.route("/profile")
 def profile():
     init_db()
@@ -1570,16 +1616,10 @@ def profile():
     ctx = base_context()
     df = sample_df(8000)
 
-    summary = {
-        "rows": int(df.shape[0]),
-        "cols": int(df.shape[1]),
-        "duplicates": int(df.duplicated().sum())
-    }
-
+    summary = {"rows": int(df.shape[0]), "cols": int(df.shape[1]), "duplicates": int(df.duplicated().sum())}
     missing = (df.isna().sum()).to_dict()
     dtypes = {c: str(df[c].dtype) for c in df.columns}
 
-    # Outliers
     outliers = {}
     for c in df.select_dtypes(include="number").columns:
         s = df[c].dropna()
@@ -1592,29 +1632,11 @@ def profile():
         high = q3 + 1.5 * iqr
         outliers[c] = int(((s < low) | (s > high)).sum())
 
-    col = request.args.get("col")
-    if not col:
-        num_cols = df.select_dtypes(include="number").columns.tolist()
-        col = num_cols[0] if num_cols else None
-
-    hist_json = None
-    if col and col in df.columns and pd.api.types.is_numeric_dtype(df[col]):
-        fig = px.histogram(df, x=col, nbins=30, title=f"Distribution: {col}")
-        hist_json = fig.to_json()
-
-    ctx.update(
-        summary=summary,
-        missing=missing,
-        dtypes=dtypes,
-        outliers=outliers,
-        hist_json=hist_json,
-        profile_col=col,
-        all_columns=df.columns.tolist()
-    )
+    ctx.update(summary=summary, missing=missing, dtypes=dtypes, outliers=outliers)
     return render_template("profile.html", **ctx, title="Data Profile")
 
 
-# CHART PAGES 
+# CHART PAGES
 @app.route("/bar")
 def bar_chart():
     if not login_required():

@@ -4,28 +4,43 @@
 {% set info = profile_info if profile_info is defined else {} %}
 {% set role_label = info.get('role', role if role is defined else 'viewer') %}
 {% set name = info.get('name', user if user is defined and user else 'Guest') %}
-{% set email = info.get('email') %}
+{% set email = info.get('email', (user ~ '@dvms.local') if user is defined and user else 'dvms@local') %}
 {% set phone = info.get('phone', '') %}
 {% set address = info.get('address', '') %}
 {% set status = info.get('status', 'Active') %}
 {% set bio = info.get('bio', 'Welcome to DVMS.') %}
 {% set avatar_url = info.get('avatar_url', '') %}
+{% set cover_url = info.get('cover_url', '') %}
+{% set website = info.get('website', '') %}
+{% set linkedin = info.get('linkedin', '') %}
+{% set github = info.get('github', '') %}
+{% set telegram = info.get('telegram', '') %}
+
+{# Initials fallback #}
+{% set parts = (name|default('')|trim).split() %}
+{% set initials = ((parts[0][0] if parts|length>0 and parts[0]|length>0 else 'U') ~ (parts[1][0] if parts|length>1 and parts[1]|length>0 else '') )|upper %}
 
 <style>
   .acc-shell { max-width: 980px; margin: 0 auto; }
   .acc-card { border-radius: 18px; overflow: hidden; }
+
   .acc-hero {
-    height: 110px;
+    height: 160px;
     background: linear-gradient(90deg, rgba(63,106,216,0.25), rgba(255, 220, 140, 0.25));
+    background-size: cover;
+    background-position: center;
   }
+
   .acc-body { padding: 18px; }
-  .acc-row { margin-top: -46px; padding: 0 18px 12px; }
+  .acc-row { margin-top: -56px; padding: 0 18px 12px; }
+
   .acc-avatar {
     width: 76px; height: 76px; border-radius: 999px; object-fit: cover;
     border: 3px solid #fff;
     box-shadow: 0 8px 24px rgba(0,0,0,.12);
     background: #fff;
   }
+
   .acc-avatar-fallback{
     width:76px;height:76px;border-radius:999px;
     display:flex;align-items:center;justify-content:center;
@@ -33,6 +48,8 @@
     box-shadow: 0 8px 24px rgba(0,0,0,.12);
     background: rgba(63,106,216,0.12);
     color:#3f6ad8;
+    font-weight:800;
+    font-size:22px;
   }
 
   .acc-field label { font-size: 12px; color: rgba(0,0,0,.55); }
@@ -101,6 +118,10 @@
         <i class="bi bi-link-45deg"></i> Copy Link
       </button>
 
+      <button class="btn btn-outline-secondary btn-sm acc-btn" type="button" onclick="downloadProfileJSON()">
+        <i class="bi bi-braces"></i> Download JSON
+      </button>
+
       <button id="editToggleBtn" class="btn btn-outline-primary btn-sm acc-btn" type="button">
         <i class="bi bi-pencil-square"></i> Edit
       </button>
@@ -108,11 +129,15 @@
       <button class="btn btn-outline-primary btn-sm acc-btn" type="button" data-bs-toggle="modal" data-bs-target="#avatarModal">
         <i class="bi bi-image"></i> Avatar
       </button>
+
+      <button class="btn btn-outline-primary btn-sm acc-btn" type="button" data-bs-toggle="modal" data-bs-target="#coverModal">
+        <i class="bi bi-images"></i> Cover
+      </button>
     </div>
   </div>
 
   <div class="card acc-card">
-    <div class="acc-hero"></div>
+    <div class="acc-hero" style="{% if cover_url %}background-image:url('{{ cover_url }}');{% endif %}"></div>
 
     <div class="acc-row">
       <div class="d-flex align-items-center justify-content-between gap-3 flex-wrap">
@@ -120,9 +145,7 @@
           {% if avatar_url %}
             <img class="acc-avatar" src="{{ avatar_url }}" alt="Avatar">
           {% else %}
-            <div class="acc-avatar-fallback">
-              <i class="bi bi-person fs-3"></i>
-            </div>
+            <div class="acc-avatar-fallback" title="{{ name }}">{{ initials }}</div>
           {% endif %}
 
           <div>
@@ -130,12 +153,8 @@
             <div class="small text-muted">{{ email }}</div>
 
             <div class="d-flex gap-2 flex-wrap mt-2">
-              <span class="acc-pill">
-                <i class="bi bi-person-badge"></i> {{ user }}
-              </span>
-              <span class="acc-pill">
-                <i class="bi bi-shield-check"></i> {{ status }}
-              </span>
+              <span class="acc-pill"><i class="bi bi-person-badge"></i> {{ user }}</span>
+              <span class="acc-pill"><i class="bi bi-shield-check"></i> {{ status }}</span>
               <span class="acc-pill">
                 {% if role_label == "admin" %}
                   <span class="badge bg-danger">Admin</span>
@@ -181,6 +200,30 @@
         <div class="col-12 acc-field">
           <label class="form-label mb-1">Bio</label>
           <textarea class="form-control acc-input" name="bio" rows="3" data-editable="1" readonly>{{ bio }}</textarea>
+        </div>
+
+        <div class="col-12"><div class="acc-divider"></div></div>
+
+        <div class="acc-section-title mb-2">Social Links</div>
+
+        <div class="col-md-6 acc-field">
+          <label class="form-label mb-1">Website</label>
+          <input class="form-control acc-input" name="website" value="{{ website }}" data-editable="1" readonly placeholder="https://...">
+        </div>
+
+        <div class="col-md-6 acc-field">
+          <label class="form-label mb-1">LinkedIn</label>
+          <input class="form-control acc-input" name="linkedin" value="{{ linkedin }}" data-editable="1" readonly placeholder="https://linkedin.com/in/...">
+        </div>
+
+        <div class="col-md-6 acc-field">
+          <label class="form-label mb-1">GitHub</label>
+          <input class="form-control acc-input" name="github" value="{{ github }}" data-editable="1" readonly placeholder="https://github.com/...">
+        </div>
+
+        <div class="col-md-6 acc-field">
+          <label class="form-label mb-1">Telegram</label>
+          <input class="form-control acc-input" name="telegram" value="{{ telegram }}" data-editable="1" readonly placeholder="https://t.me/...">
         </div>
 
         <div class="col-12">
@@ -242,7 +285,7 @@
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
-        <h6 class="modal-title"><i class="bi bi-image"></i> Update Profile Image</h6>
+        <h6 class="modal-title"><i class="bi bi-image"></i> Profile Picture</h6>
         <button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
 
@@ -266,6 +309,48 @@
         </div>
       </form>
 
+      <form method="post" action="{{ url_for('account_avatar_delete') }}">
+        <div class="modal-footer pt-0">
+          <button class="btn btn-outline-danger btn-sm acc-btn" type="submit" {% if not avatar_url %}disabled{% endif %}>
+            <i class="bi bi-trash"></i> Remove Avatar
+          </button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+</div>
+
+<!-- COVER MODAL -->
+<div class="modal fade" id="coverModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title"><i class="bi bi-images"></i> Cover / Background Image</h6>
+        <button class="btn-close" type="button" data-bs-dismiss="modal"></button>
+      </div>
+
+      <form method="post" action="{{ url_for('account_cover_upload') }}" enctype="multipart/form-data">
+        <div class="modal-body">
+          <div class="small text-muted mb-2">Upload JPG/PNG cover image.</div>
+          <input class="form-control" type="file" name="cover" accept=".png,.jpg,.jpeg" required>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline-secondary btn-sm acc-btn" type="button" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-primary btn-sm acc-btn" type="submit">
+            <i class="bi bi-upload"></i> Upload
+          </button>
+        </div>
+      </form>
+
+      <form method="post" action="{{ url_for('account_cover_delete') }}">
+        <div class="modal-footer pt-0">
+          <button class="btn btn-outline-danger btn-sm acc-btn" type="submit" {% if not cover_url %}disabled{% endif %}>
+            <i class="bi bi-trash"></i> Remove Cover
+          </button>
+        </div>
+      </form>
+
     </div>
   </div>
 </div>
@@ -276,7 +361,7 @@
     <div class="modal-content">
       <div class="modal-header">
         <h6 class="modal-title"><i class="bi bi-key"></i> Change Password</h6>
-        <button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="Close"></button>
+        <button class="btn-close" type="button" data-bs-dismiss="modal"></button>
       </div>
 
       <form method="post" action="{{ url_for('account_password') }}">
@@ -340,7 +425,7 @@
     <div class="modal-content border border-danger">
       <div class="modal-header">
         <h6 class="modal-title text-danger"><i class="bi bi-exclamation-triangle"></i> Confirm Account Deletion</h6>
-        <button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="Close"></button>
+        <button class="btn-close" type="button" data-bs-dismiss="modal"></button>
       </div>
 
       <form method="post" action="{{ url_for('account_delete') }}">
@@ -351,7 +436,7 @@
         </div>
         <div class="modal-footer">
           <button class="btn btn-outline-secondary btn-sm acc-btn" type="button" data-bs-dismiss="modal">Cancel</button>
-          <button class="btn btn-danger btn-sm acc-btn" type="submit">
+          <button class="btn btn-danger btn-sm acc-btn" type="submit" {% if role_label == 'admin' %}disabled{% endif %}>
             <i class="bi bi-trash"></i> Delete Account
           </button>
         </div>
@@ -391,7 +476,7 @@
         ? '<i class="bi bi-x-circle"></i> Editing'
         : '<i class="bi bi-pencil-square"></i> Edit';
       editBtn.classList.toggle("btn-outline-secondary", on);
-      editBtn.classList.toggle("btn-primary", !on);
+      editBtn.classList.toggle("btn-outline-primary", !on);
     }
   }
 
@@ -475,6 +560,31 @@
   updateStrength(); updateMatch();
 
 })();
+
+function downloadProfileJSON(){
+  const data = {
+    name: "{{ name|e }}",
+    email: "{{ email|e }}",
+    phone: "{{ phone|e }}",
+    address: "{{ address|e }}",
+    bio: "{{ bio|e }}",
+    website: "{{ website|e }}",
+    linkedin: "{{ linkedin|e }}",
+    github: "{{ github|e }}",
+    telegram: "{{ telegram|e }}",
+    role: "{{ role_label|e }}",
+    status: "{{ status|e }}"
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "dvms_profile.json";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 </script>
 
 {% endblock %}
