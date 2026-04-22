@@ -29,14 +29,11 @@ The system separates:
   - `.xls` (Legacy Excel)
   - `.csv` (Comma‑separated values)
 - Environment‑based dataset configuration using `DATA_PATH`
-- Fully **data‑agnostic** (no fixed schema required)
+- Fully data‑agnostic (no fixed schema required)
 - Automatic detection of numeric and non‑numeric columns
 - Centralized data loading via a dedicated `DataService` layer
-
-✅ **NEW**
-
-- **Upload dataset from the UI** (CSV/XLS/XLSX) and instantly activate it
-- **Reset dataset** to default data source
+- Upload dataset from the UI (CSV/XLS/XLSX) and instantly activate it
+- Reset dataset to default data source
 
 ---
 
@@ -76,9 +73,6 @@ Dashboard optimized for clarity:
 - Smaller font sizes for dense labels
 - Clean line charts without clutter
 - Tight layout to avoid clipping / overlap
-
-✅ **NEW**
-
 - **KPI cards** computed from the filtered dataset:
   - Rows, Columns, Numeric columns
   - Distinct categories
@@ -104,9 +98,6 @@ All charts:
 - Rendered **server‑side**
 - Saved as **PNG files**
 - Cache‑busted automatically for freshness
-
-✅ **NEW**
-
 - **Download chart as PNG** from detail pages
 - Improved readability: axis labeling and rotation
 
@@ -120,9 +111,6 @@ All charts:
   - Blue cell borders
   - Hover highlighting
 - Pagination enabled (default 15 rows per page)
-
-✅ **NEW**
-
 - **Search** across all table values
 - **Sort** by any column with **asc/desc**
 - **Export filtered data to CSV**
@@ -139,9 +127,6 @@ All charts:
   - Heatmap
   - Pie Chart
   - Data Table
-
-✅ **NEW**
-
 - Filter bar integrated into UI
 - Copy link / shareable dashboard state
 - Export controls (CSV + PDF)
@@ -151,9 +136,6 @@ All charts:
 ---
 
 ### 7) Sharing, Presets, Reports (Enterprise Features)
-
-✅ **NEW**
-
 - **Copy Link** button: share the current dashboard/table/chart state (filters included)
 - **Saved Views / Presets (Bookmarks)**:
   - Save a named view
@@ -235,10 +217,10 @@ DVMS/
 │   ├── heatmap.png
 │   └── pie.png
 │
-├── uploads/           (NEW)
+├── uploads/      
 │   └── uploaded files saved here
 │
-└── storage/           (NEW)
+└── storage/ 
     └── presets.json   saved views / bookmarks
   
 ``
